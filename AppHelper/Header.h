@@ -2,6 +2,9 @@
 #include <string>
 #include <chrono>
 #include <wx/string.h>
+#include <mysql/jdbc.h>
+#include <memory>
+#include <mutex>
 
 class Employee {
 public:
@@ -50,4 +53,36 @@ public:
     std::string NAME;
     std::string CITY;
     std::string COUNTRY;
+};
+
+class Db {
+public:
+    static void init(const std::string& url,
+        const std::string& user,
+        const std::string& password,
+        const std::string& schema);
+
+    static Db& instance();
+
+    std::unique_ptr<sql::Statement> createStatement();
+
+    std::unique_ptr<sql::PreparedStatement> prepare(const std::string& sql);
+
+private:
+    Db(const std::string& url,
+        const std::string& user,
+        const std::string& password,
+        const std::string& schema);
+
+    Db(const Db&) = delete;
+    Db& operator=(const Db&) = delete;
+
+    void ensureConnected();
+
+    static Db* instance_;
+
+    sql::Driver* driver_;
+    std::unique_ptr<sql::Connection> conn_;
+    std::string url_, user_, password_, schema_;
+    std::mutex m_;
 };

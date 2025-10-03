@@ -1,21 +1,19 @@
 ﻿#include <wx/wx.h>
-#include <mysql/jdbc.h>
-#include "AppHelper.h"
 #include "Header.h"
 #include <sstream>
 
-std::string GetAllTablesData(sql::Connection* conn) {
+std::string GetAllTablesData() {
     std::ostringstream out;
-
-    std::unique_ptr<sql::Statement> stmt(conn->createStatement());
+    auto stmt = Db::instance().createStatement();
     std::unique_ptr<sql::ResultSet> tables(stmt->executeQuery("SHOW TABLES"));
 
     while (tables->next()) {
         std::string table = tables->getString(1);
         out << "=== TABLE: " << table << " ===\n";
 
-        std::unique_ptr<sql::Statement> s2(conn->createStatement());
-        std::unique_ptr<sql::ResultSet> rows(s2->executeQuery("SELECT * FROM `" + table + "`"));
+        auto s2 = Db::instance().createStatement();
+        std::unique_ptr<sql::ResultSet> rows(
+            s2->executeQuery("SELECT * FROM `" + table + "`"));
 
         sql::ResultSetMetaData* meta = rows->getMetaData();
         int cols = meta->getColumnCount();
@@ -35,7 +33,6 @@ std::string GetAllTablesData(sql::Connection* conn) {
         }
         out << "\n";
     }
-
     return out.str();
 }
 
@@ -49,26 +46,19 @@ public:
         textCtrl->SetFont(wxFontInfo(10).Family(wxFONTFAMILY_TELETYPE));
     }
 };
-
+//
 class MyApp : public wxApp {
 public:
     bool OnInit() override {
         try {
-            sql::Driver* driver = get_driver_instance();
-            std::unique_ptr<sql::Connection> conn(
-                driver->connect("tcp://127.0.0.1:3306", "root", "$T@#MJN)IgfW23")
-            );
-            conn->setSchema("company");
-
-            std::string data = GetAllTablesData(conn.get());
-            if (data.empty()) data = "Нет данных или таблицы пусты.";
-
-            MyFrame* frame = new MyFrame("Database Viewer", data);
-            frame->Show();
+            Db::init("tcp://127.0.0.1:3306", "root", "$T@#MJN)IgfW23", "company");
+            std::string data = GetAllTablesData();
+            if (data.empty()) data = "No data or tables are empty.";
+            (new MyFrame("Database Viewer", data))->Show();
             return true;
         }
         catch (const sql::SQLException& e) {
-            wxMessageBox(wxString::Format("Ошибка БД: %s", e.what()), "Ошибка", wxOK | wxICON_ERROR);
+            wxMessageBox(wxString::Format("error DB %s", e.what()), "error", wxOK | wxICON_ERROR);
             return false;
         }
     }

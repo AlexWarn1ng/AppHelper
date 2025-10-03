@@ -139,6 +139,7 @@
     <ClInclude Include="AppHelper.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Db.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="AppHelper.cpp" />
   </ItemGroup>
