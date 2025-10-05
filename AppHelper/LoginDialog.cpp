@@ -1,0 +1,127 @@
+#include "LoginDialog.h"
+#include <memory>
+#include <wx/dcbuffer.h>  
+#include <wx/graphics.h>
+
+class GradientHeader : public wxPanel {
+public:
+    GradientHeader(wxWindow* parent,
+        const wxString& title,
+        const wxString& subtitle,
+        const wxColour& c1 = wxColour(30, 64, 175),   
+        const wxColour& c2 = wxColour(65, 105, 225))
+        : wxPanel(parent, wxID_ANY), m_title(title), m_subtitle(subtitle), m_c1(c1), m_c2(c2)
+    {
+        SetMinSize(wxSize(-1, 96));
+        SetBackgroundStyle(wxBG_STYLE_PAINT);
+        Bind(wxEVT_PAINT, &GradientHeader::OnPaint, this);
+    }
+
+private:
+    void OnPaint(wxPaintEvent&) {
+        wxAutoBufferedPaintDC dc(this);
+        wxSize sz = GetClientSize();
+        wxRect r(0, 0, sz.x, sz.y);
+
+        dc.GradientFillLinear(r, m_c1, m_c2, wxSOUTH);
+
+        dc.SetTextForeground(*wxWHITE);
+
+        wxFont titleFont = wxFontInfo(18).Bold();
+        wxFont subFont = wxFontInfo(10);
+        dc.SetFont(titleFont);
+        dc.DrawText(m_title, 16, 18);
+
+        dc.SetFont(subFont);
+        dc.DrawText(m_subtitle, 16, 48);
+    }
+
+    wxString m_title;
+    wxString m_subtitle;
+    wxColour m_c1, m_c2;
+};
+
+LoginDialog::LoginDialog(wxWindow* parent)
+    : wxDialog(parent, wxID_ANY, "Login to the system",
+        wxDefaultPosition, wxSize(520, 360),     
+        wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+{
+    auto* root = new wxBoxSizer(wxVERTICAL);
+
+    auto* header = new GradientHeader(this, "Welcome", "Please sign in to continue");
+
+    auto* formWrap = new wxPanel(this);
+    formWrap->SetBackgroundColour(wxColour(247, 247, 249)); 
+    auto* formOuter = new wxBoxSizer(wxVERTICAL);
+    auto* form = new wxFlexGridSizer(2, 12, 12);
+    form->AddGrowableCol(1, 1);
+
+    m_login = new wxTextCtrl(formWrap, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 28));
+    m_password = new wxTextCtrl(formWrap, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 28), wxTE_PASSWORD);
+
+    form->Add(new wxStaticText(formWrap, wxID_ANY, "Login:"), 0, wxALIGN_CENTER_VERTICAL);
+    form->Add(m_login, 1, wxEXPAND);
+    form->Add(new wxStaticText(formWrap, wxID_ANY, "Password:"), 0, wxALIGN_CENTER_VERTICAL);
+    form->Add(m_password, 1, wxEXPAND);
+
+    formOuter->AddSpacer(12);
+    formOuter->Add(form, 0, wxLEFT | wxRIGHT | wxEXPAND, 16);
+    formOuter->AddSpacer(12);
+    formWrap->SetSizer(formOuter);
+
+    m_error = new wxStaticText(this, wxID_ANY, "");
+    m_error->SetForegroundColour(wxColour(200, 0, 0));
+    m_error->SetMinSize(wxSize(-1, 22)); 
+
+    auto* btns = CreateSeparatedButtonSizer(wxOK | wxCANCEL);
+
+    root->Add(header, 0, wxEXPAND);
+    root->Add(formWrap, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, 0);
+    root->Add(m_error, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, 16);
+    root->Add(btns, 0, wxALL | wxEXPAND, 12);
+
+    SetSizerAndFit(root);
+    SetMinSize(wxSize(520, 360));
+    CentreOnScreen();
+
+    Bind(wxEVT_BUTTON, &LoginDialog::OnOk, this, wxID_OK);
+}
+
+void LoginDialog::OnOk(wxCommandEvent& e) {
+    m_error->SetLabel("");
+    m_ok = false;
+
+    const wxString login = m_login->GetValue();
+    const wxString pass = m_password->GetValue();
+
+    if (login.IsEmpty() || pass.IsEmpty()) {
+        m_error->SetLabel("Enter login and password.");
+        return;
+    }
+
+    try {
+        auto ps = Db::instance().prepare(
+            "SELECT EmployeeID, Position "
+            "FROM employees "
+            "WHERE EmployeeID = ? AND Password = ? "
+            "LIMIT 1"
+        );
+
+        ps->setString(1, std::string(login.mb_str()));  
+        ps->setString(2, std::string(pass.mb_str()));   
+
+        std::unique_ptr<sql::ResultSet> rs(ps->executeQuery());
+        if (rs->next()) {
+            m_userId = wxString::FromUTF8(rs->getString("EmployeeID"));
+            m_status = wxString::FromUTF8(rs->getString("Position"));
+            m_ok = true;
+            e.Skip(); 
+            return;
+        }
+        m_error->SetLabel("Invalid ID or password.");
+    }
+    catch (const sql::SQLException& ex) {
+        m_error->SetLabel(wxString::Format("Database error: %s", ex.what()));
+    }
+
+}
