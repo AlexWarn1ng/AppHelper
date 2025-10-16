@@ -56,8 +56,21 @@ LoginDialog::LoginDialog(wxWindow* parent)
     auto* form = new wxFlexGridSizer(2, 12, 12);
     form->AddGrowableCol(1, 1);
 
-    m_login = new wxTextCtrl(formWrap, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 28));
+    m_login = new wxTextCtrl(formWrap, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 28)); m_login->SetMaxLength(4);// no more than 4 cifri
     m_password = new wxTextCtrl(formWrap, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 28), wxTE_PASSWORD);
+
+    m_login->Bind(wxEVT_CHAR, [this](wxKeyEvent& event) {
+        int key = event.GetKeyCode();
+        if ((key >= '0' && key <= '9') || key == WXK_BACK || key == WXK_DELETE ||
+            key == WXK_TAB || key == WXK_RETURN || key == WXK_NUMPAD0 || key == WXK_NUMPAD9 ||
+            key == WXK_LEFT || key == WXK_RIGHT) {
+            event.Skip(); 
+        }
+        else {
+            wxBell();     
+        }
+        });
+
 
     form->Add(new wxStaticText(formWrap, wxID_ANY, "Login:"), 0, wxALIGN_CENTER_VERTICAL);
     form->Add(m_login, 1, wxEXPAND);
@@ -99,29 +112,19 @@ void LoginDialog::OnOk(wxCommandEvent& e) {
         return;
     }
 
-    try {
-        auto ps = Db::instance().prepare(
-            "SELECT EmployeeID, Position "
-            "FROM employees "
-            "WHERE EmployeeID = ? AND Password = ? "
-            "LIMIT 1"
-        );
+    auto emp = Exception::Auth([&] {
+        return Employee::Authenticate(login, pass);
+        }, m_error);
 
-        ps->setString(1, std::string(login.mb_str()));  
-        ps->setString(2, std::string(pass.mb_str()));   
+    if (emp) {
+        m_userId = emp->id();
+        m_status = emp->position();
+        m_ok = true;
+        e.Skip(); // close dialog as OK
+        return;
+    }
 
-        std::unique_ptr<sql::ResultSet> rs(ps->executeQuery());
-        if (rs->next()) {
-            m_userId = wxString::FromUTF8(rs->getString("EmployeeID"));
-            m_status = wxString::FromUTF8(rs->getString("Position"));
-            m_ok = true;
-            e.Skip(); 
-            return;
-        }
-        m_error->SetLabel("Invalid ID or password.");
-    }
-    catch (const sql::SQLException& ex) {
-        m_error->SetLabel(wxString::Format("Database error: %s", ex.what()));
-    }
+    m_error->SetLabel("Invalid ID or password.");
+
 
 }

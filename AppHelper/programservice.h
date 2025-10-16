@@ -18,7 +18,7 @@ extern "C" {
     typedef struct Pt {
         double lat;
         double lon;
-        const char* pretty;  // не освобождать в EXE
+        const char* pretty;  // govno udalit potom
     } Pt;
 
     SERVICE_API int    Service_FindAirport(const char* code, Pt* out_pt);

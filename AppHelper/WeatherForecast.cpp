@@ -1,9 +1,6 @@
-﻿// WeatherForecast.cpp
-// Требует: wxWidgets, libcurl, nlohmann::json, и подключённую service.lib (Service_FindAirport)
-
-#include <wx/wx.h>
+﻿#include <wx/wx.h>
 #include <wx/sizer.h>
-#include <wx/html/htmlwin.h>    // для красивого вывода HTML
+#include <wx/html/htmlwin.h>    
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -15,12 +12,12 @@
 #include <thread>
 #include <algorithm>
 
-#include "programservice.h"     // из твоей DLL
-#include "WeatherForecast.h"    // ShowWeatherFrame(...)
+#include "programservice.h"     
+#include "WeatherForecast.h"    
 
 using json = nlohmann::json;
 
-// ---------- HTTP ----------
+
 static size_t WriteCB(void* contents, size_t size, size_t nmemb, void* userp) {
     size_t total = size * nmemb;
     auto* s = static_cast<std::string*>(userp);
@@ -42,7 +39,7 @@ static bool HttpGet(const std::string& url, std::string& out, std::string& err) 
     return true;
 }
 
-// ---------- Helpers ----------
+
 template<class T>
 T jget(const json& j, const std::string& key, T def = T()) {
     if (j.contains(key) && !j[key].is_null()) return j[key].get<T>();
@@ -64,8 +61,7 @@ static std::string fmtVis(double meters) {
     return oss.str();
 }
 
-// 1) пытаемся найти IATA/ICAO в service.dll
-// 2) если не найдено — геокодинг Open-Meteo по названию
+
 static bool ResolvePlace(const std::string& query,
     double& lat, double& lon,
     std::string& pretty, std::string& err) {
@@ -76,7 +72,7 @@ static bool ResolvePlace(const std::string& query,
         return true;
     }
 
-    // Геокодинг по названию
+
     std::string url =
         "https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=" + query;
     std::string body;
@@ -94,7 +90,7 @@ static bool ResolvePlace(const std::string& query,
             pretty = o.str();
             return true;
         }
-        err = "No geocoding results";
+        err = "No geocoding results or wrong input!";
         return false;
     }
     catch (const std::exception& e) {
@@ -150,7 +146,7 @@ static std::string WeatherCodeToStr(int code) {
     }
 }
 
-// ---------- HTML форматирование (красивые карточки/таблица) ----------
+
 static std::string HtmlEscape(const std::string& s) {
     std::string r; r.reserve(s.size() + 16);
     for (char c : s) {
@@ -189,7 +185,7 @@ static std::string FormatWeatherHtml(const std::string& titleUtf8,
     out << "<!doctype html><html><head>"
         << "<meta charset='utf-8'><style>" << css << "</style></head><body>";
 
-    // Header
+
     out << "<div class='card'><h2>" << HtmlEscape(titleUtf8) << "</h2>";
     out << "<div class='muted'>Lat: " << jget<double>(j, "latitude")
         << " &nbsp; Lon: " << jget<double>(j, "longitude")
@@ -226,8 +222,8 @@ static std::string FormatWeatherHtml(const std::string& titleUtf8,
             & wdir = h["wind_direction_10m"], & wcod = h["weathercode"],
             & vis = h["visibility"], & prcp = h["precipitation"];
 
-        size_t n = std::min<size_t>(12, time.size()); // 12 часов
-        // нормируем бары
+        size_t n = std::min<size_t>(12, time.size()); 
+
         double tmax = -1e9, wsmax = -1e9;
         for (size_t i = 0; i < n; ++i) { tmax = std::max(tmax, t2m[i].get<double>()); wsmax = std::max(wsmax, wspd[i].get<double>()); }
         if (tmax <= 0) tmax = 1; if (wsmax <= 0) wsmax = 1;
@@ -246,8 +242,8 @@ static std::string FormatWeatherHtml(const std::string& titleUtf8,
             double viskm = vis[i].get<double>() / 1000.0;
             int dir = wdir[i].get<int>();
             int wxc = wcod[i].get<int>();
-            int barT = int((std::max(0.0, t) / tmax) * 120);   // ширина «температуры»
-            int barWs = int((std::max(0.0, ws) / wsmax) * 120);   // ширина «ветра»
+            int barT = int((std::max(0.0, t) / tmax) * 120);   
+            int barWs = int((std::max(0.0, ws) / wsmax) * 120);  
 
             out << "<tr>"
                 << "<td>" << HtmlEscape(time[i].get<std::string>()) << "</td>"
@@ -263,16 +259,16 @@ static std::string FormatWeatherHtml(const std::string& titleUtf8,
                 << "<td>" << HtmlEscape(WeatherCodeToStr(wxc)) << "</td>"
                 << "</tr>";
         }
-        out << "</tbody></table></div>"; // card
-        out << "</div>"; // flex-wrap
+        out << "</tbody></table></div>";
+        out << "</div>";
     }
 
-    out << "</div>"; // header card
+    out << "</div>";
     out << "</body></html>";
     return out.str();
 }
 
-// ---------- WX UI ----------
+
 class WeatherFrame : public wxFrame {
 public:
     WeatherFrame(wxWindow* parent = nullptr)
