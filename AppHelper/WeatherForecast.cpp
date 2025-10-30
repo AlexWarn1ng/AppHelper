@@ -1,18 +1,16 @@
 ﻿#include <wx/wx.h>
 #include <wx/sizer.h>
 #include <wx/html/htmlwin.h>    
-
+#include "Header.h"
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
-
+#include "Header.h"
 #include <string>
 #include <sstream>
 #include <iomanip>
 #include <cmath>
 #include <thread>
-#include <algorithm>
-
-#include "programservice.h"     
+#include <algorithm>   
 #include "WeatherForecast.h"    
 
 using json = nlohmann::json;
@@ -61,43 +59,11 @@ static std::string fmtVis(double meters) {
     return oss.str();
 }
 
-
-static bool ResolvePlace(const std::string& query,
-    double& lat, double& lon,
-    std::string& pretty, std::string& err) {
-    Pt pt{};
-    if (Service_FindAirport(query.c_str(), &pt)) {
-        lat = pt.lat; lon = pt.lon;
-        pretty = pt.pretty ? pt.pretty : query;
-        return true;
-    }
-
-
-    std::string url =
-        "https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=" + query;
-    std::string body;
-    if (!HttpGet(url, body, err)) return false;
-
-    try {
-        json j = json::parse(body);
-        if (j.contains("results") && j["results"].is_array() && !j["results"].empty()) {
-            const auto& r = j["results"][0];
-            lat = jget<double>(r, "latitude");
-            lon = jget<double>(r, "longitude");
-            std::ostringstream o;
-            o << jget<std::string>(r, "name");
-            if (r.contains("country")) o << ", " << r["country"].get<std::string>();
-            pretty = o.str();
-            return true;
-        }
-        err = "No geocoding results or wrong input!";
-        return false;
-    }
-    catch (const std::exception& e) {
-        err = std::string("Geocoding JSON error: ") + e.what();
-        return false;
-    }
+static std::string toLowerAscii(std::string s) {
+    for (auto& c : s) c = (char)std::tolower((unsigned char)c);
+    return s;
 }
+
 
 static std::string BuildForecastUrl(double lat, double lon) {
     std::ostringstream u;
@@ -315,30 +281,96 @@ private:
         const std::string arr = arrEdit->GetValue().ToStdString();
 
         std::thread([this, dep, arr]() {
-            auto do_one = [](const std::string& label, const std::string& q, std::string& block)->std::string {
-                double lat = 0, lon = 0; std::string pretty, err;
-                if (!ResolvePlace(q, lat, lon, pretty, err)) return label + ": " + err + "<br>";
-                std::string url = BuildForecastUrl(lat, lon);
-                std::string body;
-                if (!HttpGet(url, body, err)) return label + ": " + err + "<br>";
-                std::string ferr;
-                block = FormatWeatherHtml(label + u8" • " + pretty, body, ferr);
-                if (block.empty()) return label + ": " + ferr + "<br>";
-                return {};
+            auto do_one = [this](const std::string& label,
+                const std::string& q,
+                std::string& block) -> std::string
+                {
+                    double lat = 0, lon = 0;
+                    std::string pretty, err;
+
+                    if (!ResolvePlace(q, lat, lon, pretty, err))
+                        return label + ": " + err + "<br>";
+
+                    std::string url = BuildForecastUrl(lat, lon);
+                    std::string body;
+                    if (!HttpGet(url, body, err))
+                        return label + ": " + err + "<br>";
+
+                    std::string ferr;
+                    block = FormatWeatherHtml(label + u8" • " + pretty, body, ferr);
+                    if (block.empty())
+                        return label + ": " + ferr + "<br>";
+
+                    return {};
                 };
 
             std::string htmlAll, blk;
 
-            if (auto e = do_one("DEPARTURE", dep, blk); !e.empty()) htmlAll += "<div class='card'>" + e + "</div>";
-            else htmlAll += blk;
+            if (auto e = do_one("DEPARTURE", dep, blk); !e.empty())
+                htmlAll += "<div class='card'>" + e + "</div>";
+            else
+                htmlAll += blk;
 
-            if (auto e = do_one("ARRIVAL", arr, blk); !e.empty()) htmlAll += "<div class='card'>" + e + "</div>";
-            else htmlAll += blk;
+            if (auto e = do_one("ARRIVAL", arr, blk); !e.empty())
+                htmlAll += "<div class='card'>" + e + "</div>";
+            else
+                htmlAll += blk;
 
             CallAfter([this, htmlAll]() {
                 output->SetPage(wxString::FromUTF8(htmlAll));
                 });
             }).detach();
+    }
+
+
+    bool ChooseAirportFromDb(const std::string& query,
+        Airport& chosen,
+        std::string& err)
+    {
+        auto resOpt = ErrorHandler::ExecOrError([&] {
+            return Airport::Search(query);       
+            }, err );
+
+        if (!resOpt) return false;             
+        auto& res = *resOpt;
+
+        if (res.empty()) { err = "No airports found."; return false; }
+        if (res.size() == 1) { chosen = res.front(); return true; }
+
+        wxArrayString items;
+        items.reserve(res.size());
+        for (const auto& a : res) {
+            items.Add(wxString::Format("%s (%s/%s) - %s, %s",
+                wxString::FromUTF8(a.name),
+                wxString::FromUTF8(a.iata),
+                wxString::FromUTF8(a.icao),
+                wxString::FromUTF8(a.city),
+                wxString::FromUTF8(a.country)));
+        }
+
+        wxSingleChoiceDialog dlg(this,
+            "Select an airport",
+            "Multiple matches",
+            items);
+
+        if (dlg.ShowModal() != wxID_OK) { err = "Selection cancelled."; return false; }
+        chosen = res[dlg.GetSelection()];
+        return true;
+    }
+
+    bool ResolvePlace(const std::string& query,
+        double& lat, double& lon,
+        std::string& pretty, std::string& err)
+    {
+        Airport a;
+        if (!ChooseAirportFromDb(query, a, err))
+            return false;
+
+        lat = a.latitude;
+        lon = a.longitude;
+        pretty = a.name + " (" + a.iata + (a.icao.empty() ? "" : "/" + a.icao) + "), "
+            + a.city + ", " + a.country;
+        return true;
     }
 };
 

@@ -2,6 +2,7 @@
 #include <memory>
 #include <wx/dcbuffer.h>  
 #include <wx/graphics.h>
+#include "Header.h"
 
 class GradientHeader : public wxPanel {
 public:
@@ -112,19 +113,30 @@ void LoginDialog::OnOk(wxCommandEvent& e) {
         return;
     }
 
-    auto emp = Exception::Auth([&] {
-        return Employee::Authenticate(login, pass);
-        }, m_error);
+    try {
+        auto emp = ErrorHandler::Auth([&] {
+            return Employee::Authenticate(login, pass);
+            }, m_error); // ErrorHandler sisteminje iskl
 
-    if (emp) {
-        m_userId = emp->id();
-        m_status = emp->position();
-        m_ok = true;
-        e.Skip(); // close dialog as OK
+        if (emp) {
+            m_userId = emp->id();
+            m_status = emp->position();
+            m_ok = true;
+            e.Skip(); 
+            return;
+        }
+
+        m_error->SetLabel("Invalid ID or password.");
+    }
+    catch (const AuthException& ex) {
+        m_error->SetLabel(wxString::FromUTF8(ex.what()));
         return;
     }
-
-    m_error->SetLabel("Invalid ID or password.");
-
-
+    catch (const DatabaseException&) {
+        return;
+    }
+    catch (const AppException&) {
+        // tekst uzhe est v error handler
+        return;
+    }
 }

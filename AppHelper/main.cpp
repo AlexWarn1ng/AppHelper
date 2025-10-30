@@ -48,7 +48,7 @@ public:
 
         const wxString role = m_status.Lower();
         if (role == "pilot" || role == "co-pilot" || role == "copilot") {
-            auto* b1 = new wxButton(body, wxID_ANY, "View flight plan", wxDefaultPosition, wxSize(220, 48));
+            auto* b1 = new wxButton(body, wxID_ANY, "View weather forecast", wxDefaultPosition, wxSize(220, 48));
             auto* b2 = new wxButton(body, wxID_ANY, "Passenger manifest", wxDefaultPosition, wxSize(220, 48));
             auto* b3 = new wxButton(body, wxID_ANY, "Report incident", wxDefaultPosition, wxSize(220, 48));
             grid->Add(b1, 0, wxALIGN_CENTER);
