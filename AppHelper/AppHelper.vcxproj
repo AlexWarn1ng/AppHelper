@@ -131,7 +131,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(wxwin)\lib\vc_x64_lib;C:\libs\mysql-connector-c++-9.4.0-winx64\lib64\vs14;C:\Users\rolek\source\repos\AppHelper\AppHelper\lib\service.lib</AdditionalLibraryDirectories>
-      <AdditionalDependencies>mysqlcppconn.lib;C:\Users\rolek\source\repos\AppHelper\AppHelper\lib\service.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mysqlcppconn.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

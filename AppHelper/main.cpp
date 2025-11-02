@@ -32,22 +32,25 @@ private:
 
 class MainFrame : public wxFrame {
 public:
-    MainFrame(const wxString& userId, const wxString& status)
-        : wxFrame(nullptr, wxID_ANY, "Main Menu", wxDefaultPosition, wxSize(720, 420)),
-        m_userId(userId), m_status(status)
+    MainFrame() :
+        wxFrame(nullptr, wxID_ANY, "Main Menu", wxDefaultPosition, wxSize(720, 420))
     {
-        auto* root = new wxBoxSizer(wxVERTICAL);
+        auto& sess = Session::I();
 
-        auto* header = new GradientHeader(this,
-            wxString::Format("User: %s | Status: %s", m_userId, m_status),
-            "Select an action to continue");
+        auto* root = new wxBoxSizer(wxVERTICAL);
+        auto* header = new GradientHeader(
+            this,
+            wxString::Format("User: %s | Status: %s", sess.userId, sess.position),
+            "Select an action to continue"
+        );
 
         auto* body = new wxPanel(this);
         body->SetBackgroundColour(wxColour(247, 247, 249));
         auto* grid = new wxGridSizer(1, 3, 16, 16);
 
-        const wxString role = m_status.Lower();
-        if (role == "pilot" || role == "co-pilot" || role == "copilot") {
+        switch (sess.role) {
+        case Role::Pilot:
+        case Role::CoPilot: {
             auto* b1 = new wxButton(body, wxID_ANY, "View weather forecast", wxDefaultPosition, wxSize(220, 48));
             auto* b2 = new wxButton(body, wxID_ANY, "Passenger manifest", wxDefaultPosition, wxSize(220, 48));
             auto* b3 = new wxButton(body, wxID_ANY, "Report incident", wxDefaultPosition, wxSize(220, 48));
@@ -57,20 +60,33 @@ public:
             b1->Bind(wxEVT_BUTTON, &MainFrame::OnPilotFlightPlan, this);
             b2->Bind(wxEVT_BUTTON, &MainFrame::OnPilotManifest, this);
             b3->Bind(wxEVT_BUTTON, &MainFrame::OnPilotIncident, this);
+            break;
         }
-        else if (role == "gate agent") {
-            auto* b1 = new wxButton(body, wxID_ANY, "Find passenger", wxDefaultPosition, wxSize(220, 48));
-            auto* b2 = new wxButton(body, wxID_ANY, "Print passenger ticket", wxDefaultPosition, wxSize(220, 48));
+
+        case Role::Receptionist: {
+            auto* b1 = new wxButton(body, wxID_ANY, "Import/export from .xslx", wxDefaultPosition, wxSize(220, 48));
+            auto* b2 = new wxButton(body, wxID_ANY, "Print Ticket", wxDefaultPosition, wxSize(220, 48));
             grid->Add(b1, 0, wxALIGN_CENTER);
             grid->Add(b2, 0, wxALIGN_CENTER);
-            b1->Bind(wxEVT_BUTTON, &MainFrame::OnFindPassenger, this);
+            b1->Bind(wxEVT_BUTTON, &MainFrame::OnImportFromXSLX, this);
             b2->Bind(wxEVT_BUTTON, &MainFrame::OnPrintTicket, this);
+
+            break;
         }
-        else {
+
+        case Role::Trainee: {
+            break;
+        }
+
+        case Role::Unknown:
+        default: {
             auto* b1 = new wxButton(body, wxID_ANY, "Find passenger", wxDefaultPosition, wxSize(220, 48));
             grid->Add(b1, 0, wxALIGN_CENTER);
             b1->Bind(wxEVT_BUTTON, &MainFrame::OnFindPassenger, this);
+            break;
         }
+        }
+
 
         auto* inner = new wxBoxSizer(wxVERTICAL);
         inner->AddSpacer(24);
@@ -86,23 +102,12 @@ public:
     }
 
 private:
-    void OnFindPassenger(wxCommandEvent&) {
-        wxMessageBox("You clicked 'Find passenger'", "Info", wxOK | wxICON_INFORMATION, this);
-    }
-    void OnPrintTicket(wxCommandEvent&) {
-        wxMessageBox("You clicked 'Print passenger ticket'", "Info", wxOK | wxICON_INFORMATION, this);
-    }
-    void OnPilotFlightPlan(wxCommandEvent&) {
-            ShowWeatherFrame(this);        
-    }
-    void OnPilotManifest(wxCommandEvent&) {
-        wxMessageBox("You clicked 'Passenger manifest'", "Info", wxOK | wxICON_INFORMATION, this);
-    }
-    void OnPilotIncident(wxCommandEvent&) {
-        wxMessageBox("You clicked 'Report incident'", "Info", wxOK | wxICON_INFORMATION, this);
-    }
-
-    wxString m_userId, m_status;
+    void OnFindPassenger(wxCommandEvent&) { wxMessageBox("You clicked 'Find passenger'", "Info", wxOK | wxICON_INFORMATION, this); }
+    void OnPrintTicket(wxCommandEvent&) { wxMessageBox("You clicked 'Print passenger ticket'", "Info", wxOK | wxICON_INFORMATION, this); }
+    void OnPilotFlightPlan(wxCommandEvent&) { ShowWeatherFrame(this); }
+    void OnImportFromXSLX(wxCommandEvent&) { wxMessageBox("pididi", "Info", wxOK | wxICON_INFORMATION, this); }
+    void OnPilotManifest(wxCommandEvent&) { wxMessageBox("You clicked 'Passenger manifest'", "Info", wxOK | wxICON_INFORMATION, this); }
+    void OnPilotIncident(wxCommandEvent&) { wxMessageBox("You clicked 'Report incident'", "Info", wxOK | wxICON_INFORMATION, this); }
 };
 
 class MyApp : public wxApp {
@@ -110,10 +115,15 @@ public:
     bool OnInit() override {
         try {
             Db::init("tcp://127.0.0.1:3306", "root", "$T@#MJN)IgfW23", "company");
+
             LoginDialog login(nullptr);
             if (login.ShowModal() != wxID_OK || !login.IsAuthenticated())
                 return false;
-            auto* frame = new MainFrame(login.UserId(), login.UserStatus());
+            Session::I().userId = login.UserId();
+            Session::I().position = login.UserStatus();
+            Session::I().role = ParseRole(login.UserStatus());
+
+            auto* frame = new MainFrame();
             frame->Show();
             return true;
         }
@@ -122,6 +132,7 @@ public:
             return false;
         }
     }
+
 };
 
 wxIMPLEMENT_APP(MyApp);

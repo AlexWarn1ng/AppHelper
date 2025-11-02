@@ -22,6 +22,7 @@
 #include <wx/wx.h>
 
 
+
 class AppException : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
@@ -35,6 +36,39 @@ public:
 class AuthException : public AppException {
 public:
     using AppException::AppException;
+};
+
+enum class Role {
+    Pilot,
+    CoPilot,
+    Receptionist,
+    Trainee,
+    Unknown
+};
+inline Role ParseRole(const wxString& s) {
+    if (s == "Pilot")                          return Role::Pilot;
+    if (s == "Co-Pilot" || s == "CoPilot")     return Role::CoPilot;
+    if (s == "Receptionist")               return Role::Receptionist;
+    if (s == "TRAINEE" || s == "Trainee")      return Role::Trainee;
+
+    return Role::Unknown;
+}
+struct Session {
+    wxString userId;
+    wxString position;
+    Role role{ Role::Unknown };
+    static Session& I() { static Session s; return s; }
+    bool IsEmployee() const {
+        switch (role) {
+        case Role::Pilot:
+        case Role::CoPilot:
+        case Role::Receptionist:
+        case Role::Trainee:
+            return true;
+        default:
+            return false;
+        }
+    }
 };
 
 class Db {
