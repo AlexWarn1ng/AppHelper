@@ -5,6 +5,8 @@
 #include "Header.h"
 #include "LoginDialog.h"
 #include "WeatherForecast.h"
+#include "PassengerImportExport.h"
+#include "EditFindPassenger.h"
 
 class GradientHeader : public wxPanel {
 public:
@@ -66,10 +68,13 @@ public:
         case Role::Receptionist: {
             auto* b1 = new wxButton(body, wxID_ANY, "Import/export from .xslx", wxDefaultPosition, wxSize(220, 48));
             auto* b2 = new wxButton(body, wxID_ANY, "Print Ticket", wxDefaultPosition, wxSize(220, 48));
+            auto* b3 = new wxButton(body, wxID_ANY, "Edit/find passenger", wxDefaultPosition, wxSize(220, 48));
             grid->Add(b1, 0, wxALIGN_CENTER);
             grid->Add(b2, 0, wxALIGN_CENTER);
+            grid->Add(b3, 0, wxALIGN_CENTER);
             b1->Bind(wxEVT_BUTTON, &MainFrame::OnImportFromXSLX, this);
             b2->Bind(wxEVT_BUTTON, &MainFrame::OnPrintTicket, this);
+            b3->Bind(wxEVT_BUTTON, &MainFrame::OnEditFindpassenger, this);
 
             break;
         }
@@ -105,7 +110,8 @@ private:
     void OnFindPassenger(wxCommandEvent&) { wxMessageBox("You clicked 'Find passenger'", "Info", wxOK | wxICON_INFORMATION, this); }
     void OnPrintTicket(wxCommandEvent&) { wxMessageBox("You clicked 'Print passenger ticket'", "Info", wxOK | wxICON_INFORMATION, this); }
     void OnPilotFlightPlan(wxCommandEvent&) { ShowWeatherFrame(this); }
-    void OnImportFromXSLX(wxCommandEvent&) { wxMessageBox("pididi", "Info", wxOK | wxICON_INFORMATION, this); }
+    void OnImportFromXSLX(wxCommandEvent&) { ShowPassengerImportExport(this); }
+    void OnEditFindpassenger(wxCommandEvent&) { ShowEditFindPassenger(this); }
     void OnPilotManifest(wxCommandEvent&) { wxMessageBox("You clicked 'Passenger manifest'", "Info", wxOK | wxICON_INFORMATION, this); }
     void OnPilotIncident(wxCommandEvent&) { wxMessageBox("You clicked 'Report incident'", "Info", wxOK | wxICON_INFORMATION, this); }
 };

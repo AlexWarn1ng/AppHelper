@@ -138,6 +138,8 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="Header.h" />
     <ClInclude Include="LoginDialog.h" />
+    <ClInclude Include="EditFindpassenger.h" />
+    <ClInclude Include="PassengerImportExport.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="AppHelper.h" />
@@ -147,6 +149,8 @@
     <ClCompile Include="Db.cpp" />
     <ClCompile Include="LoginDialog.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="EditFindpassenger.cpp" />
+    <ClCompile Include="PassengerImportExport.cpp" />
     <ClCompile Include="WeatherForecast.cpp" />
   </ItemGroup>
   <ItemGroup>

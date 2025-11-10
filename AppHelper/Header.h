@@ -8,7 +8,9 @@
 #include <optional>  
 #include <wx/stattext.h>
 #pragma once
-
+#include <vector>
+#include <optional>
+#include <map>
 #include <string>
 #include <vector>
 #include <memory>
@@ -71,38 +73,73 @@ struct Session {
     }
 };
 
+class Passenger {
+public:
+    std::string PASSENGERID;
+    std::string FULLNAME;
+    std::string DOCNUMBER;
+    std::string FLIGHTNUMBER;
+    bool        BAGGAGE{};
+    bool        FOOD{};
+    std::string SEATNUMBER;
+    std::string EMAIL;
+    std::string PHONENUMBER;
+
+    struct Filter {
+        std::optional<std::string> PassengerID;
+        std::optional<std::string> FullName;
+        std::optional<std::string> DocNumber;
+        std::optional<std::string> FlightNumber;
+        std::optional<std::string> SeatNumber;
+        std::optional<std::string> Email;
+        std::optional<std::string> PhoneNumber;
+        std::optional<int>         Baggage;
+        std::optional<int>         Food;
+        std::map<std::string, std::string> extraEquals;
+
+        bool empty() const {
+            return !PassengerID && !FullName && !DocNumber && !FlightNumber &&
+                !SeatNumber && !Email && !PhoneNumber && !Baggage && !Food &&
+                extraEquals.empty();
+        }
+    };
+
+    static std::vector<Passenger> ReadFromXlsx(const std::string& path);
+    static void WriteToXlsx(const std::string& path, const std::vector<Passenger>& passengers);
+    static std::vector<Passenger> FilterPassengers(const std::vector<Passenger>& all, const Filter& filter);
+};
+
 class Db {
 public:
     static void init(const std::string& url,
         const std::string& user,
         const std::string& password,
         const std::string& schema);
-
     static Db& instance();
 
     std::unique_ptr<sql::Statement> createStatement();
-
     std::unique_ptr<sql::PreparedStatement> prepare(const std::string& sql);
+
+    std::vector<Passenger> QueryPassengers(const Passenger::Filter& filter = {});
+    void InsertOrUpdatePassenger(const Passenger& p);
+    void InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool skipIdentical = true);
 
 private:
     Db(const std::string& url,
         const std::string& user,
         const std::string& password,
         const std::string& schema);
-
     Db(const Db&) = delete;
     Db& operator=(const Db&) = delete;
 
     void ensureConnected();
 
     static Db* instance_;
-
     sql::Driver* driver_;
     std::unique_ptr<sql::Connection> conn_;
     std::string url_, user_, password_, schema_;
     std::mutex m_;
 };
-
 
 
 class Employee {
@@ -114,8 +151,7 @@ public:
     const wxString& id() const { return id_; }
     const wxString& position() const { return position_; }
 
-    static std::optional<Employee> Authenticate(const wxString& employeeId,
-        const wxString& plainPassword) {
+    static std::optional<Employee> Authenticate(const wxString& employeeId, const wxString& plainPassword) {
         try {
             auto ps = Db::instance().prepare(
                 "SELECT EmployeeID, Position "
@@ -137,6 +173,26 @@ public:
             throw DatabaseException(e.what()); // error v sql stanovitsa svoim iskluchenijem
         }
     }
+
+    struct PassengerEditAudit {
+        std::string auditId;     // unique id (timestamp-based)
+        wxString    employeeId;  //  who made
+        wxString    position;
+        size_t rowsBefore = 0;
+        size_t rowsAfter = 0;
+        size_t rowsAdded = 0;
+        size_t rowsUpdated = 0;
+        size_t rowsDeleted = 0;
+        wxString ToString() const {
+            return wxString::Format(
+                "Audit: %s\nEmployee: %s (%s)\nBefore: %zu, After: %zu\nAdded: %zu, Updated: %zu, Deleted: %zu",
+                wxString::FromUTF8(auditId), employeeId, position,
+                rowsBefore, rowsAfter, rowsAdded, rowsUpdated, rowsDeleted
+            );
+        }
+    };
+    PassengerEditAudit PreparePassengerEditAudit(const std::vector<Passenger>& before,
+        const std::vector<Passenger>& after) const;
 
 private:
     wxString id_;
@@ -216,18 +272,6 @@ public:
     }
 };
 
-class Passenger {
-public:
-    std::string PASSENGERID;
-    std::string FULLNAME;
-    std::string DOCNUMBER;
-    std::string FLIGHTNUMBER;
-    bool BAGGAGE;
-    bool FOOD;
-    std::string SEATNUMBER;
-    std::string EMAIL;
-    std::string PHONENUMBER;
-};
 
 class Flight {
 public:
