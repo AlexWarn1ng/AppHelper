@@ -45,13 +45,15 @@ enum class Role {
     CoPilot,
     Receptionist,
     Trainee,
-    Unknown
+    Unknown,
+    Admin
 };
 inline Role ParseRole(const wxString& s) {
     if (s == "Pilot")                          return Role::Pilot;
     if (s == "Co-Pilot" || s == "CoPilot")     return Role::CoPilot;
     if (s == "Receptionist")               return Role::Receptionist;
     if (s == "TRAINEE" || s == "Trainee")      return Role::Trainee;
+    if (s == "ADMIN" || s == "Admin")      return Role::Trainee;
 
     return Role::Unknown;
 }
@@ -66,6 +68,7 @@ struct Session {
         case Role::CoPilot:
         case Role::Receptionist:
         case Role::Trainee:
+        case Role::Admin:
             return true;
         default:
             return false;

@@ -90,6 +90,9 @@ public:
             b1->Bind(wxEVT_BUTTON, &MainFrame::OnFindPassenger, this);
             break;
         }
+        case Role::Admin: {
+            break;
+        }
         }
 
 
