@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <chrono>
 #include <wx/string.h>
@@ -20,10 +20,34 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 
 #include <wx/wx.h>
 
 
+class Logger {
+public:
+    static Logger& I() {
+        static Logger inst;
+        return inst;
+    }
+
+    void Write(const std::string& msg) {
+        file_ << Timestamp() << " : " << msg << "\n";
+        file_.flush();
+    }
+
+private:
+    std::ofstream file_;
+    Logger() : file_("app.log", std::ios::app) {}
+
+    std::string Timestamp() {
+        char buf[32];
+        std::time_t t = std::time(nullptr);
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&t));
+        return buf;
+    }
+};
 
 class AppException : public std::runtime_error {
 public:
@@ -53,7 +77,7 @@ inline Role ParseRole(const wxString& s) {
     if (s == "Co-Pilot" || s == "CoPilot")     return Role::CoPilot;
     if (s == "Receptionist")               return Role::Receptionist;
     if (s == "TRAINEE" || s == "Trainee")      return Role::Trainee;
-    if (s == "ADMIN" || s == "Admin")      return Role::Trainee;
+    if (s == "ADMIN" || s == "Admin")      return Role::Admin;
 
     return Role::Unknown;
 }
@@ -75,6 +99,7 @@ struct Session {
         }
     }
 };
+
 
 class Passenger {
 public:
@@ -107,10 +132,43 @@ public:
         }
     };
 
+    // эти три метода у тебя и так были объявлены
     static std::vector<Passenger> ReadFromXlsx(const std::string& path);
-    static void WriteToXlsx(const std::string& path, const std::vector<Passenger>& passengers);
-    static std::vector<Passenger> FilterPassengers(const std::vector<Passenger>& all, const Filter& filter);
+    static void WriteToXlsx(const std::string& path,
+        const std::vector<Passenger>& passengers);
+    static std::vector<Passenger> FilterPassengers(const std::vector<Passenger>& all,
+        const Filter& filter);
+
+    // ВАЖНО: только объявление, без тела!
+    static std::map<std::string, int> LoadOccupiedSeatsByFlight();
 };
+
+class Aircraft {
+public:
+    std::string REGISTRATION_NUMBER;
+    std::string MODEL;
+    int TOTAL_SEATS;
+    int ECONOMY_SEATS;
+    int BUSINESS_SEATS;
+    int FIRST_CLASS_SEATS;
+    std::string STATUS; // "Available", "Maintenance", "In Flight"
+
+    // Тоже только объявление
+    static std::map<std::string, int> LoadTotalSeatsByRegistration();
+};
+
+class Flight {
+public:
+    std::string FLIGHTNUMBER;
+    std::string DEPARTURE_AIRPORT;
+    std::string ARRIVAL_AIRPORT;
+    std::chrono::system_clock::time_point DEPARTURE_TIME;
+    std::chrono::system_clock::time_point ARRIVAL_TIME;
+    std::string AIRCRAFT_TYPE;
+    int AVAILABLE_SEATS;
+    std::string STATUS;
+};
+
 
 class Db {
 public:
@@ -126,6 +184,9 @@ public:
     std::vector<Passenger> QueryPassengers(const Passenger::Filter& filter = {});
     void InsertOrUpdatePassenger(const Passenger& p);
     void InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool skipIdentical = true);
+    std::vector<Flight> QueryFlights(); // простой вариант: без фильтра
+    void InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIdentical = true);
+
 
 private:
     Db(const std::string& url,
@@ -143,7 +204,6 @@ private:
     std::string url_, user_, password_, schema_;
     std::mutex m_;
 };
-
 
 class Employee {
 public:
@@ -255,7 +315,7 @@ public:
         }
     }
 
-    // Varik bez vozrashaemogo znachenija: true � ok, false �  oshubkaa v err
+    // Varik bez vozrashaemogo znachenija: true — ok, false —  oshubkaa v err
     template<typename F>
     static bool Try(F&& func, std::string& err, wxStaticText* errorLabel = nullptr)
     {
@@ -276,29 +336,6 @@ public:
 };
 
 
-class Flight {
-public:
-    std::string FLIGHTNUMBER;
-    std::string DEPARTURE_AIRPORT;
-    std::string ARRIVAL_AIRPORT;
-    std::chrono::system_clock::time_point DEPARTURE_TIME;
-    std::chrono::system_clock::time_point ARRIVAL_TIME;
-    std::string AIRCRAFT_TYPE;
-    int TOTAL_SEATS;
-    int AVAILABLE_SEATS;
-    std::string STATUS;
-};
-
-class Aircraft {
-public:
-    std::string REGISTRATION_NUMBER;
-    std::string MODEL;
-    int TOTAL_SEATS;
-    int ECONOMY_SEATS;
-    int BUSINESS_SEATS;
-    int FIRST_CLASS_SEATS;
-    std::string STATUS; // "Available", "Maintenance", "In Flight"
-};
 
 class Airport {
 public:
@@ -403,3 +440,18 @@ private:
     }
 };
 
+class PDFPrinter
+{
+public:
+    // Конструктор принимает путь к TTF-шрифту
+    explicit PDFPrinter(const std::string& ttfPath);
+
+    // Напечатать посадочный талон для конкретного пассажира
+    // pdfPath — куда сохранить PDF
+    void PrintTicketForPassenger(const Passenger& p,
+        const std::string& pdfPath) const;
+
+private:
+    std::string ttfPath_;
+    // НИКАКИХ HPDF_Page / HPDF_STATUS здесь больше нет
+};

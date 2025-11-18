@@ -135,6 +135,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="FlightImportExport.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Header.h" />
     <ClInclude Include="LoginDialog.h" />
@@ -147,10 +148,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Db.cpp" />
+    <ClCompile Include="FlightImportExport.cpp" />
     <ClCompile Include="LoginDialog.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="EditFindpassenger.cpp" />
     <ClCompile Include="PassengerImportExport.cpp" />
+    <ClCompile Include="PDFprinter.cpp" />
     <ClCompile Include="WeatherForecast.cpp" />
   </ItemGroup>
   <ItemGroup>

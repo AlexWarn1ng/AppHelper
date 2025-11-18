@@ -280,6 +280,15 @@ private:
         const std::string dep = depEdit->GetValue().ToStdString();
         const std::string arr = arrEdit->GetValue().ToStdString();
 
+        auto& s = Session::I();
+        std::string empId = std::string(s.userId.mb_str());
+        std::string empPos = std::string(s.position.mb_str());
+        Logger::I().Write(
+            "Employee " + empId +
+            " (" + empPos + ") requested weather: departure=" + dep + ", arrival=" + arr
+        );
+
+
         std::thread([this, dep, arr]() {
             auto do_one = [this](const std::string& label,
                 const std::string& q,
@@ -373,6 +382,8 @@ private:
         return true;
     }
 };
+
+
 
 void ShowWeatherFrame(wxWindow* parent) {
     (new WeatherFrame(parent))->Show();

@@ -1,10 +1,14 @@
-#include "Header.h"
+﻿#include "Header.h"
 #include <wx/wx.h>
 #include <wx/choice.h>
 #include <wx/grid.h>
 #include <wx/sizer.h>
+#include <wx/utils.h>
 #include <ctime>
 #include <map>
+#include <wx/filedlg.h>   // v principe ne nado no bez nego ne rabotaet
+#include <algorithm>
+
 
 static std::string MakeAuditId() {
     std::time_t t = std::time(nullptr);
@@ -48,10 +52,13 @@ Employee::PassengerEditAudit Employee::PreparePassengerEditAudit(
     return a;
 }
 
+// okno osnovnoje
+
 class EditFindPassengerFrame : public wxFrame {
 public:
     EditFindPassengerFrame(wxWindow* parent = nullptr)
         : wxFrame(parent, wxID_ANY, "Find & Edit Passengers", wxDefaultPosition, wxSize(1120, 640))
+        , pdfPrinter_("C:\\Windows\\Fonts\\arial.ttf")
     {
         auto* panel = new wxPanel(this);
 
@@ -77,7 +84,11 @@ public:
 
         grid_ = new wxGrid(panel, wxID_ANY);
         grid_->CreateGrid(0, 9);
-        const char* H[] = { "PassengerID","FullName","DocNumber","FlightNumber","Baggage","Food","SeatNumber","PhoneNumber","Email" };
+        const char* H[] = {
+            "PassengerID","FullName","DocNumber",
+            "FlightNumber","Baggage","Food",
+            "SeatNumber","PhoneNumber","Email"
+        };
         for (int c = 0; c < 9; ++c) {
             grid_->SetColLabelValue(c, H[c]);
             grid_->SetColSize(c, c < 2 ? 160 : 130);
@@ -91,10 +102,13 @@ public:
         auto* findBtn = new wxButton(panel, wxID_FIND, "Find");
         auto* clearBtn = new wxButton(panel, wxID_CLEAR, "Clear filter");
         saveBtn_ = new wxButton(panel, wxID_SAVE, "Save changes");
+        deleteBtn_ = new wxButton(panel, wxID_DELETE, "Delete selected");
         auto* reloadBtn = new wxButton(panel, wxID_REFRESH, "Reload from DB");
+        printBtn_ = new wxButton(panel, wxID_ANY, "Print ticket");
         auto* closeBtn = new wxButton(panel, wxID_CLOSE, "Close");
 
         saveBtn_->Enable(Session::I().IsEmployee());
+        deleteBtn_->Enable(Session::I().IsEmployee());
 
         auto* fg = new wxFlexGridSizer(3, 10, 6, 6);
         fg->AddGrowableCol(1, 1);
@@ -119,7 +133,9 @@ public:
         btnRow->Add(findBtn, 0, wxRIGHT, 6);
         btnRow->Add(clearBtn, 0, wxRIGHT, 6);
         btnRow->Add(saveBtn_, 0, wxRIGHT, 6);
+        btnRow->Add(deleteBtn_, 0, wxRIGHT, 6);
         btnRow->Add(reloadBtn, 0, wxRIGHT, 6);
+        btnRow->Add(printBtn_, 0, wxRIGHT, 6);
         btnRow->AddStretchSpacer(1);
         btnRow->Add(closeBtn, 0);
 
@@ -133,10 +149,13 @@ public:
 
         panel->SetSizerAndFit(root);
 
+        // биндим кнопки
         findBtn->Bind(wxEVT_BUTTON, &EditFindPassengerFrame::OnFind, this);
         clearBtn->Bind(wxEVT_BUTTON, &EditFindPassengerFrame::OnClear, this);
         saveBtn_->Bind(wxEVT_BUTTON, &EditFindPassengerFrame::OnSave, this);
+        deleteBtn_->Bind(wxEVT_BUTTON, &EditFindPassengerFrame::OnDelete, this);
         reloadBtn->Bind(wxEVT_BUTTON, &EditFindPassengerFrame::OnReload, this);
+        printBtn_->Bind(wxEVT_BUTTON, &EditFindPassengerFrame::OnPrintTicket, this);
         closeBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(); });
 
         DoReload();
@@ -147,7 +166,12 @@ private:
     wxChoice* baggage_{}, * food_{};
     wxGrid* grid_{};
     wxButton* saveBtn_{};
+    wxButton* deleteBtn_{};
+    wxButton* printBtn_{};
+    PDFPrinter  pdfPrinter_;
     std::vector<Passenger> snapshot_;
+
+    // vsiakoje govno
 
     Passenger::Filter BuildFilter() const {
         Passenger::Filter f;
@@ -237,13 +261,177 @@ private:
         }
     }
 
+    // sama pechat
+
+    Passenger GetPassengerFromRow(int r) const {
+        Passenger p;
+        p.PASSENGERID = std::string(grid_->GetCellValue(r, 0).mb_str());
+        p.FULLNAME = std::string(grid_->GetCellValue(r, 1).mb_str());
+        p.DOCNUMBER = std::string(grid_->GetCellValue(r, 2).mb_str());
+        p.FLIGHTNUMBER = std::string(grid_->GetCellValue(r, 3).mb_str());
+
+        auto toBool = [](const wxString& s) {
+            wxString v = s.Lower().Strip(wxString::both);
+            return (v == "1" || v == "true" || v == "yes" || v == "y" || v == "on");
+            };
+
+        p.BAGGAGE = toBool(grid_->GetCellValue(r, 4));
+        p.FOOD = toBool(grid_->GetCellValue(r, 5));
+        p.SEATNUMBER = std::string(grid_->GetCellValue(r, 6).mb_str());
+        p.PHONENUMBER = std::string(grid_->GetCellValue(r, 7).mb_str());
+        p.EMAIL = std::string(grid_->GetCellValue(r, 8).mb_str());
+        return p;
+    }
+
+    void OnPrintTicket(wxCommandEvent&)
+    {
+        std::string err;
+
+        bool ok = ErrorHandler::Try([&] {
+
+            if (grid_->GetNumberRows() == 0) {
+                throw AppException("There are no rows in the grid.");
+            }
+
+            // определяем выбранную строку
+            int row = -1;
+            // 1) если выделены целые строки — берём первую
+            wxArrayInt selRows = grid_->GetSelectedRows();
+            if (!selRows.IsEmpty()) {
+                row = selRows[0];
+            }
+            else {
+                // 2) иначе проверяем, выделена ли текущая ячейка
+                int curRow = grid_->GetGridCursorRow();
+                int curCol = grid_->GetGridCursorCol();
+                if (grid_->IsInSelection(curRow, curCol)) {
+                    row = curRow;
+                }
+            }
+
+            // 3) вообще ничего не выделено
+            if (row < 0 || row >= grid_->GetNumberRows()) {
+                throw AppException("Please select a passenger row first.");
+            }
+
+            // 4) проверяем, что у строки есть PassengerID
+            wxString pid = grid_->GetCellValue(row, 0).Strip(wxString::both);
+            if (pid.IsEmpty()) {
+                throw AppException("Selected row has no PassengerID.");
+            }
+
+            // ------------ собираем пассажира и печатаем ------------
+
+            Passenger p = GetPassengerFromRow(row);
+
+            wxString defaultName = wxString::Format("ticket_%s.pdf", pid);
+            wxFileDialog dlg(this, "Save ticket as...",
+                "", defaultName,
+                "PDF files (*.pdf)|*.pdf",
+                wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+            if (dlg.ShowModal() != wxID_OK) {
+                // пользователь передумал — не ошибка
+                return;
+            }
+
+            wxString path = dlg.GetPath();
+
+            pdfPrinter_.PrintTicketForPassenger(p, std::string(path.mb_str()));
+
+            auto& s = Session::I();
+            std::string empId = std::string(s.userId.mb_str());
+            std::string empPos = std::string(s.position.mb_str());
+            Logger::I().Write(
+                "Employee " + empId +
+                " (" + empPos + ") printed ticket for passenger " +
+                p.PASSENGERID
+            );
+
+            wxMessageBox("Ticket PDF has been created.",
+                "Print ticket", wxOK | wxICON_INFORMATION, this);
+            wxLaunchDefaultApplication(path);
+
+            }, err);
+
+        if (!ok) {
+            wxMessageBox(wxString::FromUTF8(err.c_str()),
+                "Print ticket", wxOK | wxICON_ERROR, this);
+        }
+    }
+
+    void OnDelete(wxCommandEvent&)
+    {
+        if (!Session::I().IsEmployee()) {
+            wxMessageBox("You are not allowed to modify passengers.",
+                "Access", wxOK | wxICON_WARNING, this);
+            return;
+        }
+
+        if (grid_->GetNumberRows() == 0) {
+            wxMessageBox("There are no rows in the grid.",
+                "Delete", wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+
+        wxArrayInt selRows = grid_->GetSelectedRows();
+        if (selRows.IsEmpty()) {
+            int curRow = grid_->GetGridCursorRow();
+            int curCol = grid_->GetGridCursorCol();
+            if (curRow >= 0 && curRow < grid_->GetNumberRows()
+                && curCol >= 0 && curCol < grid_->GetNumberCols()
+                && grid_->IsInSelection(curRow, curCol)) {
+                selRows.Add(curRow);
+            }
+        }
+
+        if (selRows.IsEmpty()) {
+            wxMessageBox("Please select row(s) to delete.",
+                "Delete", wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+
+        std::vector<int> rows;
+        rows.reserve(selRows.GetCount());
+        for (unsigned i = 0; i < selRows.GetCount(); ++i)
+            rows.push_back(selRows[i]);
+
+        std::sort(rows.begin(), rows.end());
+        rows.erase(std::unique(rows.begin(), rows.end()), rows.end());
+
+        int rc = wxMessageBox(
+            wxString::Format("Delete %zu selected row(s) from the grid?\nChanges will be applied after 'Save changes'.",
+                rows.size()),
+            "Confirm delete", wxYES_NO | wxICON_QUESTION, this);
+        if (rc != wxYES) return;
+
+        for (auto it = rows.rbegin(); it != rows.rend(); ++it) {
+            int r = *it;
+            if (r >= 0 && r < grid_->GetNumberRows())
+                grid_->DeleteRows(r, 1);
+        }
+
+        auto& s = Session::I();
+        std::string empId = std::string(s.userId.mb_str());
+        std::string empPos = std::string(s.position.mb_str());
+        Logger::I().Write(
+            "Employee " + empId +
+            " (" + empPos + ") deleted " +
+            std::to_string(rows.size()) +
+            " row(s) from passenger grid (pending save)"
+        );
+    }
+
+    //Find Clear Reload Save 
+
     void OnFind(wxCommandEvent&) {
         try {
             auto f = BuildFilter();
             auto rows = Db::instance().QueryPassengers(f);
             snapshot_ = rows;
             FillGrid(rows);
-            wxMessageBox(wxString::Format("Found %zu row(s). You can now edit cells and press 'Save changes'.", rows.size()),
+            wxMessageBox(wxString::Format(
+                "Found %zu row(s). You can now edit cells and press 'Save changes'.",
+                rows.size()),
                 "Find", wxOK | wxICON_INFORMATION, this);
         }
         catch (const std::exception& e) {
@@ -272,6 +460,7 @@ private:
                 "Save", wxOK | wxICON_INFORMATION, this);
             return;
         }
+
         Employee emp(Session::I().userId, Session::I().position);
         auto audit = emp.PreparePassengerEditAudit(snapshot_, edited);
         int rc = wxMessageBox(audit.ToString() + "\n\nApply changes to the database?",
@@ -280,6 +469,20 @@ private:
         try {
             Db::instance().InsertOrUpdatePassengers(edited);
             snapshot_ = edited;
+
+            auto& s = Session::I();
+            std::string empId = std::string(s.userId.mb_str());
+            std::string empPos = std::string(s.position.mb_str());
+            Logger::I().Write(
+                "Employee " + empId +
+                " (" + empPos + ") saved passengers: " +
+                "before=" + std::to_string(audit.rowsBefore) +
+                ", after=" + std::to_string(audit.rowsAfter) +
+                ", added=" + std::to_string(audit.rowsAdded) +
+                ", updated=" + std::to_string(audit.rowsUpdated) +
+                ", deleted=" + std::to_string(audit.rowsDeleted)
+            );
+
             wxMessageBox("Changes saved.\n\n" + audit.ToString(),
                 "Save", wxOK | wxICON_INFORMATION, this);
         }
@@ -288,6 +491,7 @@ private:
                 "Save Error", wxOK | wxICON_ERROR, this);
         }
     }
+
 };
 
 void ShowEditFindPassenger(wxWindow* parent)

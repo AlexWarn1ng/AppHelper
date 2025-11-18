@@ -259,3 +259,44 @@ void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool
     conn_->setAutoCommit(true);
 }
 
+// ------------------- Passenger / Aircraft helpers -------------------
+
+std::map<std::string, int> Passenger::LoadOccupiedSeatsByFlight()
+{
+    std::map<std::string, int> result;
+
+    auto st = Db::instance().createStatement();
+    std::unique_ptr<sql::ResultSet> rs(
+        st->executeQuery(
+            "SELECT FlightNumber, COUNT(*) AS Cnt "
+            "FROM Passengers "
+            "WHERE SeatNumber IS NOT NULL AND SeatNumber <> '' "
+            "GROUP BY FlightNumber"
+        ));
+
+    while (rs->next()) {
+        std::string fn = rs->getString("FlightNumber");
+        int count = rs->getInt("Cnt");
+        result[fn] = count;
+    }
+
+    return result;
+}
+
+std::map<std::string, int> Aircraft::LoadTotalSeatsByRegistration()
+{
+    std::map<std::string, int> result;
+
+    auto st = Db::instance().createStatement();
+    std::unique_ptr<sql::ResultSet> rs(
+        st->executeQuery(
+            "SELECT RegistrationNumber, TotalSeats FROM Aircrafts"));
+
+    while (rs->next()) {
+        std::string reg = rs->getString("RegistrationNumber");
+        int         t = rs->getInt("TotalSeats");
+        result[reg] = t;
+    }
+
+    return result;
+}
