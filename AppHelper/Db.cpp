@@ -1,7 +1,8 @@
 ﻿#include "Header.h"
 #include <stdexcept>
 #include <sstream>
-
+#include <iomanip>    // std::get_time
+#include <sstream>   
 // Вспомогательные функции для WHERE 
 static std::string BuildWhere(const Passenger::Filter& f,
                               std::vector<std::string>& bindOrder)
@@ -260,6 +261,49 @@ void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool
 }
 
 // ------------------- Passenger / Aircraft helpers -------------------
+
+std::vector<Flight> Db::QueryFlights()
+{
+    std::lock_guard<std::mutex> lock(m_);
+    ensureConnected();
+
+    std::vector<Flight> out;
+
+    auto st = conn_->createStatement();
+    std::unique_ptr<sql::ResultSet> rs(
+        st->executeQuery(
+            "SELECT FlightNumber, DepartureAirport, ArrivalAirport, "
+            "DepartureTime, ArrivalTime, AircraftType, AvailableSeats, Status "
+            "FROM Flights"
+        ));
+
+    while (rs->next()) {
+        Flight f;
+
+        f.FLIGHTNUMBER = rs->getString("FlightNumber");
+        f.DEPARTURE_AIRPORT = rs->getString("DepartureAirport");
+        f.ARRIVAL_AIRPORT = rs->getString("ArrivalAirport");
+        f.AIRCRAFT_TYPE = rs->getString("AircraftType");
+        f.AVAILABLE_SEATS = rs->getInt("AvailableSeats");
+        f.STATUS = rs->getString("Status");
+
+        // --- parse DATETIME into time_point ---
+        auto parseDT = [](const std::string& s) {
+            std::tm tm{};
+            std::istringstream ss(s);
+            ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+            return std::chrono::system_clock::from_time_t(std::mktime(&tm));
+            };
+
+        f.DEPARTURE_TIME = parseDT(rs->getString("DepartureTime"));
+        f.ARRIVAL_TIME = parseDT(rs->getString("ArrivalTime"));
+
+        out.push_back(std::move(f));
+    }
+
+    return out;
+}
+
 
 std::map<std::string, int> Passenger::LoadOccupiedSeatsByFlight()
 {

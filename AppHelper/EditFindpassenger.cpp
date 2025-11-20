@@ -6,6 +6,7 @@
 #include <wx/utils.h>
 #include <ctime>
 #include <map>
+#include <set> 
 #include <wx/filedlg.h>   // v principe ne nado no bez nego ne rabotaet
 #include <algorithm>
 
@@ -99,6 +100,13 @@ public:
         grid_->EnableDragRowSize(false);
         grid_->EnableDragGridSize(false);
 
+        {
+            auto* attr = new wxGridCellAttr();
+            attr->SetReadOnly(true);
+            attr->SetBackgroundColour(*wxLIGHT_GREY);
+            grid_->SetColAttr(0, attr);
+        }
+
         auto* findBtn = new wxButton(panel, wxID_FIND, "Find");
         auto* clearBtn = new wxButton(panel, wxID_CLEAR, "Clear filter");
         saveBtn_ = new wxButton(panel, wxID_SAVE, "Save changes");
@@ -172,6 +180,67 @@ private:
     std::vector<Passenger> snapshot_;
 
     // vsiakoje govno
+    static bool IsLettersAndSpaces(const wxString& s) {
+        for (wxUniChar c : s) {
+            if (wxIsspace(c)) continue;
+            if (!wxIsalpha(c)) return false;
+        }
+        return true;
+    }
+
+    static wxString NormalizeFullName(wxString s) {
+        s.Trim(true).Trim(false); // удалить пробелы по краям
+        s.MakeLower();
+        bool newWord = true;
+        for (size_t i = 0; i < s.length(); ++i) {
+            wxUniChar c = s[i];
+            if (wxIsspace(c)) {
+                newWord = true;
+            }
+            else if (newWord) {
+                s[i] = wxToupper(c);
+                newWord = false;
+            }
+        }
+        return s;
+    }
+
+    static bool IsValidSeat(wxString s) {
+        s.Trim(true).Trim(false);
+        if (s.length() != 3) return false;
+        wxUniChar c0 = s[0], c1 = s[1], c2 = s[2];
+        if (!wxIsdigit(c0) || !wxIsdigit(c1) || !wxIsalpha(c2))
+            return false;
+        return true;
+    }
+
+    static bool IsValidPhone(const wxString& s) {
+        wxString p = s;
+        p.Trim(true).Trim(false);
+        if (!p.StartsWith("+7")) return false;
+        if (p.length() != 12) return false; // +7 и 10 цифр
+        for (size_t i = 2; i < p.length(); ++i) {
+            if (!wxIsdigit(p[i])) return false;
+        }
+        return true;
+    }
+
+    static bool IsValidEmail(const wxString& s) {
+        wxString e = s;
+        e.Trim(true).Trim(false);
+        if (e.IsEmpty()) return false;
+        if (e.Find(' ') != wxNOT_FOUND) return false;
+
+        int atPos = e.Find('@');
+        if (atPos <= 0) return false; // @ не в начале и вообще есть
+
+        int dotPos = e.Find('.', true); // true = искать с конца
+        if (dotPos == wxNOT_FOUND) return false;
+        if (dotPos <= atPos + 1) return false;          // точка сразу после @ — плохо
+        if (dotPos >= (int)e.length() - 1) return false; // точка последняя — плохо
+
+        return true;
+    }
 
     Passenger::Filter BuildFilter() const {
         Passenger::Filter f;
@@ -201,31 +270,146 @@ private:
     static std::vector<Passenger> CollectFromGrid(wxGrid* g) {
         std::vector<Passenger> out;
         int R = g->GetNumberRows();
+        if (R == 0) return out;
+
+        // Подгружаем список допустимых FlightNumber из таблицы flights
+        std::set<std::string> validFlights;
+        {
+            auto flights = Db::instance().QueryFlights();
+            for (const auto& f : flights) {
+                validFlights.insert(f.FLIGHTNUMBER);
+            }
+        }
+
+        auto toBool = [](const wxString& s) {
+            wxString v = s.Lower().Strip(wxString::both);
+            return (v == "1" || v == "true" || v == "yes" || v == "y" || v == "on");
+            };
+
         for (int r = 0; r < R; ++r) {
+            int rowNo = r + 1;
+
+            // Проверяем, не пустая ли вообще строка
             bool allEmpty = true;
-            for (int c = 0; c < 9; ++c)
-                if (!g->GetCellValue(r, c).IsEmpty()) { allEmpty = false; break; }
-            if (allEmpty) continue;
+            for (int c = 0; c < 9; ++c) {
+                if (!g->GetCellValue(r, c).Strip(wxString::both).IsEmpty()) {
+                    allEmpty = false;
+                    break;
+                }
+            }
+            if (allEmpty) {
+                // полностью пустые строки пропускаем
+                continue;
+            }
 
             Passenger p;
-            p.PASSENGERID = std::string(g->GetCellValue(r, 0).mb_str());
-            if (p.PASSENGERID.empty()) continue;
-            p.FULLNAME = std::string(g->GetCellValue(r, 1).mb_str());
-            p.DOCNUMBER = std::string(g->GetCellValue(r, 2).mb_str());
-            p.FLIGHTNUMBER = std::string(g->GetCellValue(r, 3).mb_str());
-            auto toBool = [](const wxString& s) {
-                wxString v = s.Lower().Strip(wxString::both);
-                return (v == "1" || v == "true" || v == "yes" || v == "y" || v == "on");
-                };
+
+            // 1) PassengerID — обязателен
+            wxString pid = g->GetCellValue(r, 0).Strip(wxString::both);
+            if (pid.IsEmpty()) {
+                throw AppException(
+                    wxString::Format("Row %d: PassengerID must not be empty.", rowNo).ToStdString()
+                );
+            }
+            p.PASSENGERID = std::string(pid.mb_str());
+
+            // 2) FullName — только буквы и пробелы, каждое слово с заглавной
+            wxString full = g->GetCellValue(r, 1).Strip(wxString::both);
+            if (full.IsEmpty()) {
+                throw AppException(
+                    wxString::Format("Row %d: FullName is required.", rowNo).ToStdString()
+                );
+            }
+            if (!IsLettersAndSpaces(full)) {
+                throw AppException(
+                    wxString::Format("Row %d: FullName must contain only letters and spaces.", rowNo).ToStdString()
+                );
+            }
+            full = NormalizeFullName(full);
+            p.FULLNAME = std::string(full.mb_str());
+
+            // 3) DocNumber — только буквы и цифры, без пробелов, верхний регистр
+            wxString doc = g->GetCellValue(r, 2).Strip(wxString::both);
+            if (doc.IsEmpty()) {
+                throw AppException(
+                    wxString::Format("Row %d: DocNumber is required.", rowNo).ToStdString()
+                );
+            }
+            for (wxUniChar c : doc) {
+                if (!wxIsalnum(c)) {
+                    throw AppException(
+                        wxString::Format("Row %d: DocNumber must contain only letters and digits, no spaces.", rowNo).ToStdString()
+                    );
+                }
+            }
+            doc.MakeUpper();
+            p.DOCNUMBER = std::string(doc.mb_str());
+
+            // 4) FlightNumber — должен существовать в таблице flights
+            wxString flt = g->GetCellValue(r, 3).Strip(wxString::both);
+            if (flt.IsEmpty()) {
+                throw AppException(
+                    wxString::Format("Row %d: FlightNumber is required.", rowNo).ToStdString()
+                );
+            }
+            std::string fltStd = std::string(flt.mb_str());
+            if (!validFlights.count(fltStd)) {
+                throw AppException(
+                    wxString::Format(
+                        "Row %d: FlightNumber '%s' does not exist in flights table.",
+                        rowNo, flt
+                    ).ToStdString()
+                );
+            }
+            p.FLIGHTNUMBER = fltStd;
+
+            // 5) Baggage / Food — как раньше
             p.BAGGAGE = toBool(g->GetCellValue(r, 4));
             p.FOOD = toBool(g->GetCellValue(r, 5));
-            p.SEATNUMBER = std::string(g->GetCellValue(r, 6).mb_str());
-            p.PHONENUMBER = std::string(g->GetCellValue(r, 7).mb_str());
-            p.EMAIL = std::string(g->GetCellValue(r, 8).mb_str());
+
+            // 6) SeatNumber — 2 цифры + 1 буква
+            wxString seat = g->GetCellValue(r, 6).Strip(wxString::both);
+            if (!IsValidSeat(seat)) {
+                throw AppException(
+                    wxString::Format(
+                        "Row %d: SeatNumber must have format NNX (two digits and one letter), e.g. 12B.",
+                        rowNo
+                    ).ToStdString()
+                );
+            }
+            seat.MakeUpper();
+            p.SEATNUMBER = std::string(seat.mb_str());
+
+            // 7) PhoneNumber — обязателен, +7XXXXXXXXXX
+            wxString phone = g->GetCellValue(r, 7).Strip(wxString::both);
+            if (!IsValidPhone(phone)) {
+                throw AppException(
+                    wxString::Format(
+                        "Row %d: PhoneNumber must have format +7XXXXXXXXXX.",
+                        rowNo
+                    ).ToStdString()
+                );
+            }
+            p.PHONENUMBER = std::string(phone.mb_str());
+
+            // 8) Email — формат user@host.domain
+            wxString email = g->GetCellValue(r, 8).Strip(wxString::both);
+            if (!IsValidEmail(email)) {
+                throw AppException(
+                    wxString::Format(
+                        "Row %d: Email must have format like user@host.domain.",
+                        rowNo
+                    ).ToStdString()
+                );
+            }
+            p.EMAIL = std::string(email.mb_str());
+
             out.push_back(std::move(p));
         }
+
         return out;
     }
+
 
     void FillGrid(const std::vector<Passenger>& rows) {
         grid_->ClearGrid();
@@ -454,19 +638,23 @@ private:
                 "Access", wxOK | wxICON_WARNING, this);
             return;
         }
-        auto edited = CollectFromGrid(grid_);
-        if (edited.empty()) {
-            wxMessageBox("There are no valid rows to save.",
-                "Save", wxOK | wxICON_INFORMATION, this);
-            return;
-        }
 
-        Employee emp(Session::I().userId, Session::I().position);
-        auto audit = emp.PreparePassengerEditAudit(snapshot_, edited);
-        int rc = wxMessageBox(audit.ToString() + "\n\nApply changes to the database?",
-            "Confirm changes", wxYES_NO | wxICON_QUESTION, this);
-        if (rc != wxYES) return;
-        try {
+        std::string err;
+
+        bool ok = ErrorHandler::Try([&] {
+
+            auto edited = CollectFromGrid(grid_);
+            if (edited.empty()) {
+                throw AppException("There are no valid rows to save.");
+            }
+
+            Employee emp(Session::I().userId, Session::I().position);
+            auto audit = emp.PreparePassengerEditAudit(snapshot_, edited);
+
+            int rc = wxMessageBox(audit.ToString() + "\n\nApply changes to the database?",
+                "Confirm changes", wxYES_NO | wxICON_QUESTION, this);
+            if (rc != wxYES) return;
+
             Db::instance().InsertOrUpdatePassengers(edited);
             snapshot_ = edited;
 
@@ -485,12 +673,15 @@ private:
 
             wxMessageBox("Changes saved.\n\n" + audit.ToString(),
                 "Save", wxOK | wxICON_INFORMATION, this);
-        }
-        catch (const std::exception& e) {
-            wxMessageBox(wxString::Format("Error: %s", e.what()),
+
+            }, err);
+
+        if (!ok) {
+            wxMessageBox(wxString::FromUTF8(err.c_str()),
                 "Save Error", wxOK | wxICON_ERROR, this);
         }
     }
+
 
 };
 

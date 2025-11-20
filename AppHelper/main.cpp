@@ -67,14 +67,14 @@ public:
         }
 
         case Role::Receptionist: {
-            auto* b1 = new wxButton(body, wxID_ANY, "Import/export from .xslx", wxDefaultPosition, wxSize(220, 48));
-            auto* b2 = new wxButton(body, wxID_ANY, "Print Ticket", wxDefaultPosition, wxSize(220, 48));
+            auto* b1 = new wxButton(body, wxID_ANY, "Import/export from .xslx passengers", wxDefaultPosition, wxSize(220, 48));
+            auto* b2 = new wxButton(body, wxID_ANY, "Add passenger", wxDefaultPosition, wxSize(220, 48));
             auto* b3 = new wxButton(body, wxID_ANY, "Edit/find passenger", wxDefaultPosition, wxSize(220, 48));
             grid->Add(b1, 0, wxALIGN_CENTER);
             grid->Add(b2, 0, wxALIGN_CENTER);
             grid->Add(b3, 0, wxALIGN_CENTER);
             b1->Bind(wxEVT_BUTTON, &MainFrame::OnImportFromXSLX, this);
-            b2->Bind(wxEVT_BUTTON, &MainFrame::OnPrintTicket, this);
+            b2->Bind(wxEVT_BUTTON, &MainFrame::OnAddPassenger, this);
             b3->Bind(wxEVT_BUTTON, &MainFrame::OnEditFindpassenger, this);
 
             break;
@@ -91,17 +91,11 @@ public:
         }
         case Role::Admin: {
             auto* b1 = new wxButton(body, wxID_ANY, "Import/export from .xslx passengers", wxDefaultPosition, wxSize(220, 48));
-            auto* b2 = new wxButton(body, wxID_ANY, "Import/export from .xslx airports", wxDefaultPosition, wxSize(220, 48));
             auto* b3 = new wxButton(body, wxID_ANY, "Edit/find employee", wxDefaultPosition, wxSize(220, 48));
-            auto* b4 = new wxButton(body, wxID_ANY, "Import/export from .xslx airplanes", wxDefaultPosition, wxSize(220, 48));
             grid->Add(b1, 0, wxALIGN_CENTER);
-            grid->Add(b2, 0, wxALIGN_CENTER);
             grid->Add(b3, 0, wxALIGN_CENTER);
-            grid->Add(b4, 0, wxALIGN_CENTER);
             b1->Bind(wxEVT_BUTTON, &MainFrame::OnImportFromXSLX, this);
-            b2->Bind(wxEVT_BUTTON, &MainFrame::OnImportFromXSLXFLIGHTS, this);
             b3->Bind(wxEVT_BUTTON, &MainFrame::test, this);
-            b4->Bind(wxEVT_BUTTON, &MainFrame::test, this);
             wxMessageBox("You are logged in as admin. Be sure to log out after finishing your work.", "WARNING", wxOK | wxICON_INFORMATION, this);
             break;
         }
@@ -122,7 +116,7 @@ public:
     }
 
 private:
-    void OnPrintTicket(wxCommandEvent&) { wxMessageBox("You clicked 'Print passenger ticket'", "Info", wxOK | wxICON_INFORMATION, this); }
+    void OnAddPassenger(wxCommandEvent&) { wxMessageBox("You clicked 'Print passenger ticket'", "Info", wxOK | wxICON_INFORMATION, this); }
     void OnPilotFlightPlan(wxCommandEvent&) { ShowWeatherFrame(this); }
     void OnImportFromXSLX(wxCommandEvent&) { ShowPassengerImportExport(this); }
     void OnImportFromXSLXFLIGHTS(wxCommandEvent&) { ShowFlightImportExport(this); }

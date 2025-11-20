@@ -25,6 +25,7 @@
 #include <wx/wx.h>
 
 
+
 class Logger {
 public:
     static Logger& I() {
@@ -100,18 +101,32 @@ struct Session {
     }
 };
 
+class Person {
+public:
+    std::string FULLNAME;
+    std::string EMAIL;
+    std::string PHONENUMBER;
 
-class Passenger {
+    Person() = default;
+
+    Person(std::string fullName,
+        std::string email,
+        std::string phone)
+        : FULLNAME(std::move(fullName)),
+        EMAIL(std::move(email)),
+        PHONENUMBER(std::move(phone))
+    {}
+};
+
+
+class Passenger : public Person {
 public:
     std::string PASSENGERID;
-    std::string FULLNAME;
     std::string DOCNUMBER;
     std::string FLIGHTNUMBER;
     bool        BAGGAGE{};
     bool        FOOD{};
     std::string SEATNUMBER;
-    std::string EMAIL;
-    std::string PHONENUMBER;
 
     struct Filter {
         std::optional<std::string> PassengerID;
@@ -205,7 +220,7 @@ private:
     std::mutex m_;
 };
 
-class Employee {
+class Employee : public Person {
 public:
     Employee() = default;
     Employee(wxString id, wxString position)
@@ -238,8 +253,8 @@ public:
     }
 
     struct PassengerEditAudit {
-        std::string auditId;     // unique id (timestamp-based)
-        wxString    employeeId;  //  who made
+        std::string auditId;     
+        wxString    employeeId;  
         wxString    position;
         size_t rowsBefore = 0;
         size_t rowsAfter = 0;
