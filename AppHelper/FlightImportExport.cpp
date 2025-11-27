@@ -32,7 +32,7 @@ static std::chrono::system_clock::time_point StringToTimePoint(const std::string
 }
 
 // для записи в БД (можно тот же формат)
-static std::string TimePointToSql(const std::chrono::system_clock::time_point& tp)
+std::string TimePointToSql(const std::chrono::system_clock::time_point& tp)
 {
     return ErrorHandler::TimePointToString(tp); // достаточно
 }

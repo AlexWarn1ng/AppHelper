@@ -1,5 +1,5 @@
 ﻿#pragma once
 #include <wx/window.h>
 
-// Окно импорта/экспорта рейсов (по аналогии с ShowPassengerImportExport)
+std::string TimePointToSql(const std::chrono::system_clock::time_point& tp);
 void ShowFlightImportExport(wxWindow* parent = nullptr);

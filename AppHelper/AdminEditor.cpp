@@ -10,6 +10,7 @@
 #include <chrono>
 #include <sstream>
 #include <iomanip>
+#include "FlightImportExport.h"   
 
 // ==== маленькие хелперы валидации (скопированы с пассажиров) =====
 
@@ -139,14 +140,26 @@ private:
         ClearError();
         auto sel = grid_->GetSelectedRows();
         if (sel.IsEmpty()) {
-            wxMessageBox("No rows selected.", "Delete", wxOK | wxICON_INFORMATION, this);
+            wxMessageBox("No rows selected.", "Delete",
+                wxOK | wxICON_INFORMATION, this);
             return;
         }
+
+        // --- подтверждение ---
+        int rc = wxMessageBox(
+            wxString::Format("Delete %u selected row(s)?", sel.GetCount()),
+            "Confirm delete",
+            wxYES_NO | wxICON_QUESTION,
+            this);
+        if (rc != wxYES)
+            return;
+
         // удаляем с конца, чтобы индексы не поехали
         for (int i = (int)sel.GetCount() - 1; i >= 0; --i) {
             grid_->DeleteRows(sel[i]);
         }
     }
+
 
     void OnSave(wxCommandEvent&) {
         ClearError();
@@ -601,7 +614,8 @@ private:
             double lat = wxAtof(latStr);
             double lon = wxAtof(lonStr);
 
-            std::string iataStd = std::string(iata.mb_str());
+            // ВАЖНО: в std::string – UTF-8, а не mb_str()
+            std::string iataStd = std::string(iata.ToUTF8());
             currentIata.insert(iataStd);
 
             bool existedBefore =
@@ -612,10 +626,10 @@ private:
                 auto ps = Db::instance().prepare(
                     "UPDATE airports SET icao=?, name=?, city=?, country=?, latitude=?, longitude=? "
                     "WHERE iata=?");
-                ps->setString(1, std::string(icao.mb_str()));
-                ps->setString(2, std::string(name.mb_str()));
-                ps->setString(3, std::string(city.mb_str()));
-                ps->setString(4, std::string(country.mb_str()));
+                ps->setString(1, std::string(icao.ToUTF8()));
+                ps->setString(2, std::string(name.ToUTF8()));
+                ps->setString(3, std::string(city.ToUTF8()));
+                ps->setString(4, std::string(country.ToUTF8()));
                 ps->setDouble(5, lat);
                 ps->setDouble(6, lon);
                 ps->setString(7, iataStd);
@@ -626,10 +640,10 @@ private:
                     "INSERT INTO airports (iata, icao, name, city, country, latitude, longitude) "
                     "VALUES (?,?,?,?,?,?,?)");
                 ps->setString(1, iataStd);
-                ps->setString(2, std::string(icao.mb_str()));
-                ps->setString(3, std::string(name.mb_str()));
-                ps->setString(4, std::string(city.mb_str()));
-                ps->setString(5, std::string(country.mb_str()));
+                ps->setString(2, std::string(icao.ToUTF8()));
+                ps->setString(3, std::string(name.ToUTF8()));
+                ps->setString(4, std::string(city.ToUTF8()));
+                ps->setString(5, std::string(country.ToUTF8()));
                 ps->setDouble(6, lat);
                 ps->setDouble(7, lon);
                 ps->execute();
@@ -645,6 +659,8 @@ private:
             }
         }
     }
+
+
 
     // ================= FLIGHTS =========================
 
@@ -713,7 +729,16 @@ private:
         std::vector<Flight> toSave;
         std::set<std::string> currentNums;
 
+        struct RowInfo {
+            Flight fl;
+            bool existedBefore{};
+        };
+        std::vector<RowInfo> parsed;
+        parsed.reserve(rows);
+
         for (int r = 0; r < rows; ++r) {
+            int rowNo = r + 1;
+
             wxString fn = grid_->GetCellValue(r, 0).Strip(wxString::both);
             wxString dep = grid_->GetCellValue(r, 1).Strip(wxString::both);
             wxString arr = grid_->GetCellValue(r, 2).Strip(wxString::both);
@@ -722,38 +747,163 @@ private:
             wxString ac = grid_->GetCellValue(r, 5).Strip(wxString::both);
             wxString st = grid_->GetCellValue(r, 6).Strip(wxString::both);
 
-            if (fn.IsEmpty())
-                throw AppException("Flight row " + std::to_string(r + 1) + ": FlightNumber is required.");
+            // --- FlightNumber ---
+            if (fn.IsEmpty()) {
+                throw AppException("Flight row " + std::to_string(rowNo) +
+                    ": FlightNumber is required.");
+            }
+            fn.MakeUpper();
+            {
+                std::string fnStd = std::string(fn.mb_str());
+                if (!Flight::IsValidFlightNumberFormat(fnStd)) {
+                    throw AppException("Flight row " + std::to_string(rowNo) +
+                        ": invalid FlightNumber format.");
+                }
+            }
+
+            // --- Departure / Arrival airport ---
+            auto checkAirport = [&](wxString& code, const char* fieldName) {
+                if (code.IsEmpty()) {
+                    throw AppException("Flight row " + std::to_string(rowNo) +
+                        ": " + std::string(fieldName) + " is required.");
+                }
+                code.MakeUpper();
+                if (code.length() != 3) {
+                    throw AppException("Flight row " + std::to_string(rowNo) +
+                        ": " + std::string(fieldName) +
+                        " must be 3-letter IATA code (e.g. LHR).");
+                }
+                for (wxUniChar ch : code) {
+                    if (!wxIsalpha(ch)) {
+                        throw AppException("Flight row " + std::to_string(rowNo) +
+                            ": " + std::string(fieldName) +
+                            " must contain only letters.");
+                    }
+                }
+                };
+
+            checkAirport(dep, "DepartureAirport");
+            checkAirport(arr, "ArrivalAirport");
+
+            // --- Departure / Arrival time ---
+            if (dt.IsEmpty() || at.IsEmpty()) {
+                throw AppException("Flight row " + std::to_string(rowNo) +
+                    ": DepartureTime and ArrivalTime are required.");
+            }
+            auto depTime = WxToTimePoint(dt);
+            auto arrTime = WxToTimePoint(at);
+
+            // --- AircraftType (как номер борта: буквы/цифры, допускаем '-') ---
+            if (ac.IsEmpty()) {
+                throw AppException("Flight row " + std::to_string(rowNo) +
+                    ": AircraftType is required.");
+            }
+            ac.MakeUpper();
+            {
+                wxString acCheck = ac;
+                acCheck.Replace("-", "");
+                std::string acStdCheck = std::string(acCheck.mb_str());
+                if (!Flight::IsValidFlightNumberFormat(acStdCheck)) {
+                    throw AppException("Flight row " + std::to_string(rowNo) +
+                        ": invalid AircraftType format.");
+                }
+            }
+
+            // --- Status (как имя: буквы + пробелы, но в БД храним в CAPS) ---
+            if (!ErrorHandler::IsLettersAndSpaces(st)) {
+                throw AppException("Flight row " + std::to_string(rowNo) +
+                    ": Status must contain only letters and spaces.");
+            }
+            st.MakeUpper();  // всегда CAPS
 
             Flight fl;
             fl.FLIGHTNUMBER = std::string(fn.mb_str());
             fl.DEPARTURE_AIRPORT = std::string(dep.mb_str());
             fl.ARRIVAL_AIRPORT = std::string(arr.mb_str());
-            fl.DEPARTURE_TIME = WxToTimePoint(dt);
-            fl.ARRIVAL_TIME = WxToTimePoint(at);
+            fl.DEPARTURE_TIME = depTime;
+            fl.ARRIVAL_TIME = arrTime;
             fl.AIRCRAFT_TYPE = std::string(ac.mb_str());
             fl.STATUS = std::string(st.mb_str());
-            fl.AVAILABLE_SEATS = 0; // пересчитается
+            fl.AVAILABLE_SEATS = 0;  // пересчитается позже
 
-            fl.Validate();   // используем уже существующую логику
-            toSave.push_back(fl);
+            // Используем существующую логику проверки рейса
+            fl.Validate();
+
+            RowInfo info;
+            info.fl = fl;
+            info.existedBefore =
+                std::find(flightsBeforeNumbers_.begin(),
+                    flightsBeforeNumbers_.end(),
+                    fl.FLIGHTNUMBER) != flightsBeforeNumbers_.end();
+
+            parsed.push_back(std::move(info));
             currentNums.insert(fl.FLIGHTNUMBER);
         }
 
-        // пересчёт AvailableSeats
-        Flight::ComputeAvailableSeats(toSave);
-        Db::instance().InsertOrUpdateFlights(toSave, false);
+        // пересчитываем AvailableSeats для всех рейсов
+        std::vector<Flight> flightsForSeats;
+        flightsForSeats.reserve(parsed.size());
+        for (const auto& ri : parsed)
+            flightsForSeats.push_back(ri.fl);
+        Flight::ComputeAvailableSeats(flightsForSeats);
 
-        // delete: те рейсы, которых нет сейчас
-        for (const auto& fnOld : flightsBeforeNumbers_) {
-            if (currentNums.find(fnOld) == currentNums.end()) {
+        // копируем рассчитанные AVAILABLE_SEATS обратно
+        for (size_t i = 0; i < parsed.size(); ++i) {
+            parsed[i].fl.AVAILABLE_SEATS = flightsForSeats[i].AVAILABLE_SEATS;
+        }
+
+        // ----- применяем изменения к БД: UPDATE / INSERT -----
+        for (const auto& ri : parsed) {
+            const Flight& fl = ri.fl;
+
+            if (ri.existedBefore) {
+                auto ps = Db::instance().prepare(
+                    "UPDATE Flights SET "
+                    "DepartureAirport=?, ArrivalAirport=?, "
+                    "DepartureTime=?, ArrivalTime=?, "
+                    "AircraftType=?, Status=?, AvailableSeats=? "
+                    "WHERE FlightNumber=?");
+                ps->setString(1, fl.DEPARTURE_AIRPORT);
+                ps->setString(2, fl.ARRIVAL_AIRPORT);
+                ps->setString(3, TimePointToSql(fl.DEPARTURE_TIME));
+                ps->setString(4, TimePointToSql(fl.ARRIVAL_TIME));
+                ps->setString(5, fl.AIRCRAFT_TYPE);
+                ps->setString(6, fl.STATUS);
+                ps->setInt(7, fl.AVAILABLE_SEATS);
+                ps->setString(8, fl.FLIGHTNUMBER);
+                ps->execute();
+            }
+            else {
+                auto ps = Db::instance().prepare(
+                    "INSERT INTO Flights "
+                    "(FlightNumber, DepartureAirport, ArrivalAirport, "
+                    "DepartureTime, ArrivalTime, AircraftType, Status, "
+                    "AvailableSeats) "
+                    "VALUES (?,?,?,?,?,?,?,?)");
+                ps->setString(1, fl.FLIGHTNUMBER);
+                ps->setString(2, fl.DEPARTURE_AIRPORT);
+                ps->setString(3, fl.ARRIVAL_AIRPORT);
+                ps->setString(4, TimePointToSql(fl.DEPARTURE_TIME));
+                ps->setString(5, TimePointToSql(fl.ARRIVAL_TIME));
+                ps->setString(6, fl.AIRCRAFT_TYPE);
+                ps->setString(7, fl.STATUS);
+                ps->setInt(8, fl.AVAILABLE_SEATS);
+                ps->execute();
+            }
+        }
+
+        // ----- DELETE: удаляем рейсы, которых теперь нет в гриде -----
+        for (const auto& oldFn : flightsBeforeNumbers_) {
+            if (currentNums.find(oldFn) == currentNums.end()) {
                 auto ps = Db::instance().prepare(
                     "DELETE FROM Flights WHERE FlightNumber=?");
-                ps->setString(1, fnOld);
+                ps->setString(1, oldFn);
                 ps->execute();
             }
         }
     }
+
+
 };
 
 void ShowAdminRefEditor(wxWindow* parent)

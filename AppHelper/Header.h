@@ -475,6 +475,16 @@ public:
         std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm);
         return buf;
     }
+
+    static bool IsLettersSpacesHyphen(const wxString& s)
+    {
+        for (wxChar c : s) {
+            if (!(wxIsalpha(c) || c == ' ' || c == '-' ))
+                return false;
+        }
+        return true;
+    }
+
 };
 
 
