@@ -135,25 +135,35 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="AdminEditor.h" />
     <ClInclude Include="FlightImportExport.h" />
+    <ClInclude Include="FlightSelection.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Header.h" />
     <ClInclude Include="LoginDialog.h" />
     <ClInclude Include="EditFindpassenger.h" />
     <ClInclude Include="PassengerImportExport.h" />
+    <ClInclude Include="PDFreport.h" />
+    <ClInclude Include="RegisterPassenger.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="SeatSelection.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="AppHelper.h" />
     <ClInclude Include="WeatherForecast.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AdminEditor.cpp" />
     <ClCompile Include="Db.cpp" />
     <ClCompile Include="FlightImportExport.cpp" />
+    <ClCompile Include="FlightSelection.cpp" />
     <ClCompile Include="LoginDialog.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="EditFindpassenger.cpp" />
     <ClCompile Include="PassengerImportExport.cpp" />
     <ClCompile Include="PDFprinter.cpp" />
+    <ClCompile Include="PDFreport.cpp" />
+    <ClCompile Include="RegisterPassenger.cpp" />
+    <ClCompile Include="SeatSelection.cpp" />
     <ClCompile Include="WeatherForecast.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -1,22 +1,21 @@
 ﻿#define _CRT_SECURE_NO_WARNINGS
 #include <hpdf.h>
-#include "Header.h"    // чтобы увидеть struct Passenger
+#include "Header.h"
 #include <stdexcept>
 #include <string>
 #include <cstdio>
+#include <ctime> 
 
 extern "C" {
 #include <zint.h>
 }
-
-// ---------- Реализация класса PDFPrinter ----------
 
 PDFPrinter::PDFPrinter(const std::string& ttfPath)
     : ttfPath_(ttfPath)
 {
 }
 
-// Статический обработчик ошибок libharu
+// Обработчик ошибок Haru
 static void HaruErrorHandler(HPDF_STATUS code, HPDF_STATUS detail, void*)
 {
     char buf[128];
@@ -25,7 +24,7 @@ static void HaruErrorHandler(HPDF_STATUS code, HPDF_STATUS detail, void*)
     throw std::runtime_error(buf);
 }
 
-// Нарисовать QR из Zint прямо в PDF
+// Рисуем QR-код в PDF
 static void DrawQrOnPdf(HPDF_Page page, const std::string& textUtf8,
     float posX, float posY, float sizePt)
 {
@@ -36,22 +35,22 @@ static void DrawQrOnPdf(HPDF_Page page, const std::string& textUtf8,
     sym->symbology = BARCODE_QRCODE;
     sym->input_mode = UNICODE_MODE;
     sym->eci = 26;
-    sym->option_1 = 4;   // ECC H
+    sym->option_1 = 4;
     sym->scale = 1.0f;
     sym->border_width = 0;
 
-    int rc = ZBarcode_Encode(sym,
+    if (ZBarcode_Encode(sym,
         reinterpret_cast<const unsigned char*>(textUtf8.c_str()),
-        static_cast<int>(textUtf8.size()));
-    if (rc != 0) {
-        std::string msg = "Zint encode fail: " + std::to_string(rc) + " " + sym->errtxt;
+        static_cast<int>(textUtf8.size())) != 0)
+    {
+        std::string msg = "Zint encode fail: " + std::string(sym->errtxt);
         ZBarcode_Delete(sym);
         throw std::runtime_error(msg);
     }
 
-    rc = ZBarcode_Buffer_Vector(sym, 0);
-    if (rc != 0 || !sym->vector) {
-        std::string msg = "Zint vector fail: " + std::to_string(rc) + " " + sym->errtxt;
+    if (ZBarcode_Buffer_Vector(sym, 0) != 0 || !sym->vector)
+    {
+        std::string msg = "Zint vector fail: " + std::string(sym->errtxt);
         ZBarcode_Delete(sym);
         throw std::runtime_error(msg);
     }
@@ -60,40 +59,108 @@ static void DrawQrOnPdf(HPDF_Page page, const std::string& textUtf8,
     float scale = sizePt / v->width;
 
     HPDF_Page_SetGrayFill(page, 0.0f);
-    for (const zint_vector_rect* r = v->rectangles; r; r = r->next) {
-        float rx = posX + r->x * scale;
-        float ry = posY + r->y * scale;
-        float rw = r->width * scale;
-        float rh = r->height * scale;
-        HPDF_Page_Rectangle(page, rx, ry, rw, rh);
+
+    for (const zint_vector_rect* r = v->rectangles; r; r = r->next)
+    {
+        HPDF_Page_Rectangle(
+            page,
+            posX + r->x * scale,
+            posY + r->y * scale,
+            r->width * scale,
+            r->height * scale
+        );
         HPDF_Page_Fill(page);
     }
 
     ZBarcode_Delete(sym);
 }
 
+
+// "YYYY-MM-DD" -> time_point начала/конца дня
+static std::chrono::system_clock::time_point ParseDateIso(const std::string& iso,
+    bool endOfDay)
+{
+    if (iso.size() != 10 || iso[4] != '-' || iso[7] != '-') {
+        throw std::runtime_error("Invalid date format, expected YYYY-MM-DD");
+    }
+
+    int year = std::stoi(iso.substr(0, 4));
+    int month = std::stoi(iso.substr(5, 2));
+    int day = std::stoi(iso.substr(8, 2));
+
+    std::tm tm{};
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month - 1;
+    tm.tm_mday = day;
+
+    if (endOfDay) {
+        tm.tm_hour = 23;
+        tm.tm_min = 59;
+        tm.tm_sec = 59;
+    }
+    else {
+        tm.tm_hour = 0;
+        tm.tm_min = 0;
+        tm.tm_sec = 0;
+    }
+
+    std::time_t tt = std::mktime(&tm);
+    return std::chrono::system_clock::from_time_t(tt);
+}
+
+
+// ---------------- Печать билета ----------------
+
 void PDFPrinter::PrintTicketForPassenger(const Passenger& p,
     const std::string& pdfPath) const
 {
-    // создаём PDF-документ
-    HPDF_Doc pdf = HPDF_New(HaruErrorHandler, nullptr);  // БЕЗ PDFPrinter:: и &
-
+    HPDF_Doc pdf = HPDF_New(HaruErrorHandler, nullptr);
     if (!pdf)
         throw std::runtime_error("Cannot create PDF");
 
-    try {
+    try
+    {
         HPDF_UseUTFEncodings(pdf);
         HPDF_SetCurrentEncoder(pdf, "UTF-8");
 
-        const char* fontName =
-            HPDF_LoadTTFontFromFile(pdf, ttfPath_.c_str(), HPDF_TRUE);
-        HPDF_Font font = HPDF_GetFont(pdf, fontName, "UTF-8");
+        HPDF_Font font =
+            HPDF_GetFont(pdf,
+                HPDF_LoadTTFontFromFile(pdf, ttfPath_.c_str(), HPDF_TRUE),
+                "UTF-8");
 
         HPDF_Page page = HPDF_AddPage(pdf);
         HPDF_Page_SetWidth(page, 842);
         HPDF_Page_SetHeight(page, 300);
 
-        // ---- Верхняя полоса ----
+        // ---------- читаем рейс из таблицы Flights ----------
+        bool hasFlight = false;
+        std::string fromAirport = "-";
+        std::string toAirport = "-";
+        std::string depDT = "-";
+        std::string arrDT = "-";
+
+        try {
+            auto ps = Db::instance().prepare(
+                "SELECT DepartureAirport, ArrivalAirport, "
+                "       DepartureTime, ArrivalTime "
+                "FROM flights WHERE FlightNumber = ?"
+            );
+            ps->setString(1, p.FLIGHTNUMBER);
+
+            std::unique_ptr<sql::ResultSet> rs(ps->executeQuery());
+            if (rs->next()) {
+                hasFlight = true;
+
+                fromAirport = rs->getString("DepartureAirport");
+                toAirport = rs->getString("ArrivalAirport");
+
+                depDT = rs->getString("DepartureTime");
+                arrDT = rs->getString("ArrivalTime");
+            }
+        }
+        catch (...) {}
+
+        // ---------- верхняя синяя полоса ----------
         HPDF_Page_SetRGBFill(page, 0.1f, 0.3f, 0.7f);
         HPDF_Page_Rectangle(page, 0, 280, 842, 20);
         HPDF_Page_Fill(page);
@@ -104,74 +171,291 @@ void PDFPrinter::PrintTicketForPassenger(const Passenger& p,
         HPDF_Page_TextOut(page, 30, 250, u8"АВИАКОМПАНИЯ ИМЯ");
         HPDF_Page_EndText(page);
 
-        // Основные данные
+        // ---------- Рейс, вылет, прибытие ----------
         HPDF_Page_BeginText(page);
         HPDF_Page_SetFontAndSize(page, font, 14);
 
-        std::string flt = p.FLIGHTNUMBER;
-        std::string date = "03 Окт 2025";   // TODO
-        std::string boarding = "14:25";         // TODO
+        HPDF_Page_TextOut(page, 30, 220, (std::string(u8"Рейс: ") + p.FLIGHTNUMBER).c_str());
+        HPDF_Page_TextOut(page, 230, 220, (std::string(u8"Вылет: ") + depDT).c_str());
+        HPDF_Page_TextOut(page, 480, 220, (std::string(u8"Прибытие: ") + arrDT).c_str());
 
-        std::string lineFlight = std::string(u8"Рейс: ") + flt;
-        std::string lineDate = std::string(u8"Дата: ") + date;
-        std::string lineBoarding = std::string(u8"Посадка: ") + boarding;
-
-        HPDF_Page_TextOut(page, 30, 220, lineFlight.c_str());
-        HPDF_Page_TextOut(page, 200, 220, lineDate.c_str());
-        HPDF_Page_TextOut(page, 400, 220, lineBoarding.c_str());
         HPDF_Page_EndText(page);
 
-        // Пассажир, откуда/куда
+        // ---------- Пассажир ----------
         HPDF_Page_BeginText(page);
         HPDF_Page_SetFontAndSize(page, font, 16);
 
-        std::string name = p.FULLNAME;
-        std::string seat = p.SEATNUMBER;
+        HPDF_Page_TextOut(page, 30, 190, (std::string(u8"Пассажир: ") + p.FULLNAME).c_str());
+        HPDF_Page_TextOut(page, 30, 165, (std::string(u8"Откуда: ") + fromAirport).c_str());
+        HPDF_Page_TextOut(page, 300, 165, (std::string(u8"Куда: ") + toAirport).c_str());
 
-        std::string fromCity = "Москва (SVO)";
-        std::string toCity = "Санкт-Петербург (LED)";
+        // место, багаж, питание
+        HPDF_Page_TextOut(page, 30, 140, (std::string(u8"Место: ") + p.SEATNUMBER).c_str());
+        HPDF_Page_TextOut(page, 30, 120, (std::string(u8"Багаж: ") + (p.BAGGAGE ? u8"есть" : u8"нет")).c_str());
+        HPDF_Page_TextOut(page, 30, 100, (std::string(u8"Питание: ") + (p.FOOD ? u8"заказано" : u8"нет")).c_str());
 
-        std::string lineName = std::string(u8"Пассажир: ") + name;
-        std::string lineFrom = std::string(u8"Откуда: ") + fromCity;
-        std::string lineTo = std::string(u8"Куда: ") + toCity;
-
-        HPDF_Page_TextOut(page, 30, 190, lineName.c_str());
-        HPDF_Page_TextOut(page, 30, 165, lineFrom.c_str());
-        HPDF_Page_TextOut(page, 300, 165, lineTo.c_str());
         HPDF_Page_EndText(page);
 
-        // Место и выход
-        HPDF_Page_BeginText(page);
-        HPDF_Page_SetFontAndSize(page, font, 16);
+        // ---------- QR ----------
+        std::string route = hasFlight ?
+            (fromAirport + "-" + toAirport) : "UNKNOWN";
 
-        std::string gate = "B12"; // TODO
-        std::string lineSeat = std::string(u8"Место: ") + seat;
-        std::string lineGate = std::string(u8"Выход: ") + gate;
-
-        HPDF_Page_TextOut(page, 30, 140, lineSeat.c_str());
-        HPDF_Page_TextOut(page, 200, 140, lineGate.c_str());
-        HPDF_Page_EndText(page);
-
-        // QR снизу справа
         std::string qrPayload =
-            flt + "|" + date + "|SVO-LED|" + name + "|SEAT " + seat + "|GATE " + gate;
+            p.FLIGHTNUMBER + "|" + depDT + "|" + arrDT + "|" + route +
+            "|" + p.FULLNAME + "|SEAT " + p.SEATNUMBER;
 
-        float qrSize = 160.0f;
-        float qrX = 820 - qrSize - 20;
-        float qrY = 20.0f;
+        DrawQrOnPdf(page, qrPayload, 820 - 160 - 20, 20, 160);
 
-        DrawQrOnPdf(page, qrPayload, qrX, qrY, qrSize);
-
-        // подпись под QR
+        // подпись
         HPDF_Page_BeginText(page);
         HPDF_Page_SetFontAndSize(page, font, 10);
-        HPDF_Page_TextOut(page, qrX, qrY - 12, u8"Покажите QR при посадке");
+        HPDF_Page_TextOut(page, 820 - 160 - 20, 8, u8"Покажите QR при посадке");
         HPDF_Page_EndText(page);
 
         HPDF_SaveToFile(pdf, pdfPath.c_str());
         HPDF_Free(pdf);
     }
     catch (...) {
+        HPDF_Free(pdf);
+        throw;
+    }
+}
+
+void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
+    const std::string& dateToIso,
+    const std::string& pdfPath) const
+{
+    // 1) Готовим диапазон дат
+    auto tpFrom = ParseDateIso(dateFromIso, false);
+    auto tpTo = ParseDateIso(dateToIso, true);
+
+    // 2) Загружаем ВСЕ рейсы и фильтруем по времени вылета
+    auto allFlights = Db::instance().QueryFlights();
+    std::vector<Flight> flights;
+    flights.reserve(allFlights.size());
+
+    for (const auto& f : allFlights) {
+        if (f.DEPARTURE_TIME >= tpFrom && f.DEPARTURE_TIME <= tpTo) {
+            flights.push_back(f);
+        }
+    }
+
+    // Сортируем по времени вылета, затем по номеру рейса
+    std::sort(flights.begin(), flights.end(),
+        [](const Flight& a, const Flight& b) {
+            if (a.DEPARTURE_TIME != b.DEPARTURE_TIME)
+                return a.DEPARTURE_TIME < b.DEPARTURE_TIME;
+            return a.FLIGHTNUMBER < b.FLIGHTNUMBER;
+        });
+
+    // 3) Создаём PDF
+    HPDF_Doc pdf = HPDF_New(HaruErrorHandler, nullptr);
+    if (!pdf)
+        throw std::runtime_error("Cannot create PDF");
+
+    try
+    {
+        HPDF_UseUTFEncodings(pdf);
+        HPDF_SetCurrentEncoder(pdf, "UTF-8");
+
+        HPDF_Font font =
+            HPDF_GetFont(pdf,
+                HPDF_LoadTTFontFromFile(pdf, ttfPath_.c_str(), HPDF_TRUE),
+                "UTF-8");
+
+        // Формат страницы — A4 портрет
+        const float PAGE_W = 595.0f;
+        const float PAGE_H = 842.0f;
+        const float LEFT = 40.0f;
+        const float RIGHT = PAGE_W - 40.0f;
+        const float TOP = PAGE_H - 60.0f;
+        const float BOTTOM = 40.0f;
+        const float LINE_H = 18.0f;
+
+        HPDF_Page page = nullptr;
+        float y = 0.0f;
+        int pageNo = 0;
+
+        auto NewPage = [&]() {
+            page = HPDF_AddPage(pdf);
+            ++pageNo;
+            HPDF_Page_SetWidth(page, PAGE_W);
+            HPDF_Page_SetHeight(page, PAGE_H);
+
+            // Верхняя синяя полоса
+            HPDF_Page_SetRGBFill(page, 0.1f, 0.3f, 0.7f);
+            HPDF_Page_Rectangle(page, 0, PAGE_H - 40, PAGE_W, 40);
+            HPDF_Page_Fill(page);
+
+            HPDF_Page_SetRGBFill(page, 0.0f, 0.0f, 0.0f);
+
+            // Заголовок
+            HPDF_Page_BeginText(page);
+            HPDF_Page_SetFontAndSize(page, font, 18);
+            HPDF_Page_TextOut(page, LEFT, PAGE_H - 28, u8"Отчёт по пассажажирам");
+
+            // Период
+            HPDF_Page_SetFontAndSize(page, font, 11);
+            float periodY = PAGE_H - 60.0f;     // ← ЧЁТКО под заголовком
+            std::string period = u8"Период: " + dateFromIso + " — " + dateToIso;
+            HPDF_Page_TextOut(page, LEFT, periodY, period.c_str());
+
+            HPDF_Page_EndText(page);
+
+            // ↓↓↓ Здесь мы устанавливаем y ТОЛЬКО после периода!
+            y = periodY - 25.0f;    // ← расстояние между периодом и “Рейс …”
+            };
+
+
+        auto EnsureSpace = [&](float need) {
+            if (!page || y - need < BOTTOM) {
+                NewPage();
+            }
+            };
+
+        // Отрисовка шапки таблицы для конкретного рейса
+        auto DrawPassengersHeader = [&](const Flight& flt) {
+
+            // Заголовок рейса
+            HPDF_Page_BeginText(page);
+            HPDF_Page_SetFontAndSize(page, font, 14);
+
+            std::string line1 =
+                std::string(u8"Рейс ") + flt.FLIGHTNUMBER +
+                "  " + flt.DEPARTURE_AIRPORT + " -> " + flt.ARRIVAL_AIRPORT;
+            HPDF_Page_TextOut(page, LEFT, y, line1.c_str());
+            y -= LINE_H * 1.3f;
+
+            HPDF_Page_SetFontAndSize(page, font, 10);
+            std::string line2 =
+                std::string(u8"Вылет: ") + ErrorHandler::TimePointToString(flt.DEPARTURE_TIME) +
+                std::string(u8"   Прибытие: ") + ErrorHandler::TimePointToString(flt.ARRIVAL_TIME) +
+                std::string(u8"   Борт: ") + flt.AIRCRAFT_TYPE +
+                std::string(u8"   Статус: ") + flt.STATUS;
+
+            HPDF_Page_TextOut(page, LEFT, y, line2.c_str());
+            HPDF_Page_EndText(page);
+
+            y -= LINE_H * 1.5f;
+
+            // Шапка таблицы пассажиров
+            HPDF_Page_BeginText(page);
+            HPDF_Page_SetFontAndSize(page, font, 9);
+
+            HPDF_Page_TextOut(page, LEFT, y, u8"ID");
+            HPDF_Page_TextOut(page, LEFT + 50, y, u8"ФИО");
+            HPDF_Page_TextOut(page, LEFT + 230, y, u8"Документ");
+            HPDF_Page_TextOut(page, LEFT + 340, y, u8"Место");
+            HPDF_Page_TextOut(page, LEFT + 390, y, u8"Багаж");
+            HPDF_Page_TextOut(page, LEFT + 440, y, u8"Питание");
+
+            HPDF_Page_EndText(page);
+
+            y -= LINE_H * 1.0f;
+
+            // Линия под шапкой
+            HPDF_Page_SetLineWidth(page, 0.5f);
+            HPDF_Page_MoveTo(page, LEFT, y);
+            HPDF_Page_LineTo(page, RIGHT, y);
+            HPDF_Page_Stroke(page);
+
+            y -= LINE_H * 0.8f;
+            };
+
+        // Если рейсов нет — всё равно сформируем одну страницу с сообщением
+        if (flights.empty()) {
+            NewPage();
+            HPDF_Page_BeginText(page);
+            HPDF_Page_SetFontAndSize(page, font, 12);
+            HPDF_Page_TextOut(page, LEFT, y,
+                u8"В указанном периоде рейсов не найдено.");
+            HPDF_Page_EndText(page);
+
+            HPDF_SaveToFile(pdf, pdfPath.c_str());
+            HPDF_Free(pdf);
+            return;
+        }
+
+        // 4) Для каждого рейса — отдельный блок с пассажирами
+        for (const auto& flt : flights) {
+
+            // Загружаем пассажиров данного рейса
+            Passenger::Filter pf;
+            pf.FlightNumber = flt.FLIGHTNUMBER;
+            auto passengers = Db::instance().QueryPassengers(pf);
+
+            // Сортировка пассажиров по месту, а затем по ФИО
+            std::sort(passengers.begin(), passengers.end(),
+                [](const Passenger& a, const Passenger& b) {
+                    if (a.SEATNUMBER != b.SEATNUMBER)
+                        return a.SEATNUMBER < b.SEATNUMBER;
+                    return a.FULLNAME < b.FULLNAME;
+                });
+
+            // --- перед шапкой рейса: гарантируем место для шапки + хотя бы одной строки ---
+            // чтобы шапка не висела одна внизу страницы
+            EnsureSpace(LINE_H * 6.0f);
+
+            // Заголовок рейса + шапка таблицы
+            DrawPassengersHeader(flt);
+
+            if (passengers.empty()) {
+                EnsureSpace(LINE_H * 2.0f);
+                HPDF_Page_BeginText(page);
+                HPDF_Page_SetFontAndSize(page, font, 10);
+                HPDF_Page_TextOut(page, LEFT, y,
+                    u8"Нет пассажиров на этом рейсе.");
+                HPDF_Page_EndText(page);
+                y -= LINE_H * 1.5f;
+                continue;
+            }
+
+            // Строки по пассажирам
+            for (const auto& p : passengers) {
+                // запоминаем номер страницы до проверки места
+                int prevPageNo = pageNo;
+
+                // нужно место под строку + небольшой запас
+                EnsureSpace(LINE_H * 3.0f);
+
+                // если EnsureSpace создала новую страницу — перерисуем шапку рейса
+                if (pageNo != prevPageNo) {
+                    DrawPassengersHeader(flt);
+                }
+
+                HPDF_Page_BeginText(page);
+                HPDF_Page_SetFontAndSize(page, font, 9);
+
+                std::string id = p.PASSENGERID;
+                std::string fio = p.FULLNAME;
+                std::string doc = p.DOCNUMBER;
+                std::string seat = p.SEATNUMBER;
+                std::string bag = p.BAGGAGE ? u8"Да" : u8"Нет";
+                std::string food = p.FOOD ? u8"Да" : u8"Нет";
+
+                HPDF_Page_TextOut(page, LEFT, y, id.c_str());
+                HPDF_Page_TextOut(page, LEFT + 50, y, fio.c_str());
+                HPDF_Page_TextOut(page, LEFT + 230, y, doc.c_str());
+                HPDF_Page_TextOut(page, LEFT + 340, y, seat.c_str());
+                HPDF_Page_TextOut(page, LEFT + 390, y, bag.c_str());
+                HPDF_Page_TextOut(page, LEFT + 440, y, food.c_str());
+
+                HPDF_Page_EndText(page);
+
+                // увеличенный шаг между пассажирами
+                y -= LINE_H * 1.3f;
+            }
+
+            // отступ между рейсами
+            y -= LINE_H * 1.6f;
+        }
+
+
+        HPDF_SaveToFile(pdf, pdfPath.c_str());
+        HPDF_Free(pdf);
+    }
+    catch (...)
+    {
         HPDF_Free(pdf);
         throw;
     }

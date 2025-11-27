@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <ctime>
 
 #include <wx/wx.h>
 
@@ -162,14 +163,16 @@ class Aircraft {
 public:
     std::string REGISTRATION_NUMBER;
     std::string MODEL;
-    int TOTAL_SEATS;
-    int ECONOMY_SEATS;
-    int BUSINESS_SEATS;
-    int FIRST_CLASS_SEATS;
+    int TOTAL_SEATS{};
+    int ECONOMY_SEATS{};
+    int BUSINESS_SEATS{};
+    int FIRST_CLASS_SEATS{};
     std::string STATUS; // "Available", "Maintenance", "In Flight"
 
-    // Тоже только объявление
+    // Только ОБЪЯВЛЕНИЯ методов (как ты просил)
     static std::map<std::string, int> LoadTotalSeatsByRegistration();
+    static bool Exists(const std::string& registration);
+    static int GetTotalSeats(const std::string& registration);
 };
 
 class Flight {
@@ -177,13 +180,42 @@ public:
     std::string FLIGHTNUMBER;
     std::string DEPARTURE_AIRPORT;
     std::string ARRIVAL_AIRPORT;
-    std::chrono::system_clock::time_point DEPARTURE_TIME;
-    std::chrono::system_clock::time_point ARRIVAL_TIME;
+    std::chrono::system_clock::time_point DEPARTURE_TIME{};
+    std::chrono::system_clock::time_point ARRIVAL_TIME{};
     std::string AIRCRAFT_TYPE;
-    int AVAILABLE_SEATS;
+    int AVAILABLE_SEATS{};
     std::string STATUS;
-};
 
+    struct Filter {
+        std::optional<std::string> FlightNumber;
+        std::optional<std::string> DepartureAirport;
+        std::optional<std::string> ArrivalAirport;
+        std::optional<std::string> AircraftType;
+        std::optional<std::string> Status;  
+
+        bool empty() const {
+            return !FlightNumber &&
+                !DepartureAirport &&
+                !ArrivalAirport &&
+                !AircraftType &&
+                !Status;
+        }
+    };
+
+    void Validate() const;
+    void ComputeAvailableSeats();
+
+    static void ValidateFlightsForImport(std::vector<Flight>& flights);
+    static void ComputeAvailableSeats(std::vector<Flight>& flights);
+
+    static bool IsValidFlightNumberFormat(const std::string& fn);
+    static bool IsValidAirportCode(const std::string& code);
+
+    bool IsValidRoute() const;
+    bool IsValidTimes() const;
+    bool IsValidAircraft() const;
+
+};
 
 class Db {
 public:
@@ -199,8 +231,9 @@ public:
     std::vector<Passenger> QueryPassengers(const Passenger::Filter& filter = {});
     void InsertOrUpdatePassenger(const Passenger& p);
     void InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool skipIdentical = true);
-    std::vector<Flight> QueryFlights(); // простой вариант: без фильтра
+    std::vector<Flight> QueryFlights(const Flight::Filter& filter = {});
     void InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIdentical = true);
+    void DeletePassengers(const std::vector<std::string>& passengerIds);
 
 
 private:
@@ -348,6 +381,100 @@ public:
             err = "Unknown error."; return false;
         }
     }
+    // vspomagatelnoje
+    static bool IsValidPhone(const wxString& s) {
+        wxString p = s;
+        p.Trim(true).Trim(false);
+        if (!p.StartsWith("+7")) return false;
+        if (p.length() != 12) return false; // +7 и 10 цифр
+        for (size_t i = 2; i < p.length(); ++i) {
+            if (!wxIsdigit(p[i])) return false;
+        }
+        return true;
+    }
+
+    static bool IsValidEmail(const wxString& s) {
+        wxString e = s;
+        e.Trim(true).Trim(false);
+        if (e.IsEmpty()) return false;
+        if (e.Find(' ') != wxNOT_FOUND) return false;
+
+        int atPos = e.Find('@');
+        if (atPos <= 0) return false;
+
+        int dotPos = e.Find('.', true); 
+        if (dotPos == wxNOT_FOUND) return false;
+        if (dotPos <= atPos + 1) return false;
+        if (dotPos >= (int)e.length() - 1) return false;
+
+        return true;
+    }
+
+    static bool IsLettersAndSpaces(const wxString& s) {
+        for (wxUniChar c : s) {
+            if (wxIsspace(c)) continue;
+            if (!wxIsalpha(c)) return false;
+        }
+        return true;
+    }
+
+    static wxString NormalizeFullName(wxString s) {
+        s.Trim(true).Trim(false); // удалить пробелы по краям
+        s.MakeLower();
+        bool newWord = true;
+        for (size_t i = 0; i < s.length(); ++i) {
+            wxUniChar c = s[i];
+            if (wxIsspace(c)) {
+                newWord = true;
+            }
+            else if (newWord) {
+                s[i] = wxToupper(c);
+                newWord = false;
+            }
+        }
+        return s;
+    }
+
+    static bool IsValidSeat(wxString s) {
+        s.Trim(true).Trim(false);
+        if (s.length() != 3) return false;
+        wxUniChar c0 = s[0], c1 = s[1], c2 = s[2];
+        if (!wxIsdigit(c0) || !wxIsdigit(c1) || !wxIsalpha(c2))
+            return false;
+        return true;
+    }
+
+    static bool NormalizeDocNumber(wxString& doc) {
+        doc = doc.Strip(wxString::both);
+        if (doc.IsEmpty()) return false;
+        for (wxUniChar c : doc) {
+            if (!wxIsalnum(c)) return false;
+        }
+        doc.MakeUpper();
+        return true;
+    }
+
+    static bool CellToBool(const wxString& s) {
+        wxString v = s.Lower().Strip(wxString::both);
+        return (v == "1" || v == "true" || v == "yes" || v == "y" || v == "on");
+    }
+
+    static std::string TimePointToString(const std::chrono::system_clock::time_point& tp)
+    {
+        if (tp.time_since_epoch().count() == 0)
+            return "";
+
+        std::time_t t = std::chrono::system_clock::to_time_t(tp);
+        std::tm tm{};
+#ifdef _WIN32
+        localtime_s(&tm, &t);
+#else
+        localtime_r(&t, &tm);
+#endif
+        char buf[20];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm);
+        return buf;
+    }
 };
 
 
@@ -464,6 +591,12 @@ public:
     // Напечатать посадочный талон для конкретного пассажира
     // pdfPath — куда сохранить PDF
     void PrintTicketForPassenger(const Passenger& p,
+        const std::string& pdfPath) const;
+
+    // Напечатать отчёт по пассажирам за период дат (включительно).
+    // Даты в формате "YYYY-MM-DD" (как wxDateTime::FormatISODate()).
+    void PrintPassengersReport(const std::string& dateFromIso,
+        const std::string& dateToIso,
         const std::string& pdfPath) const;
 
 private:
