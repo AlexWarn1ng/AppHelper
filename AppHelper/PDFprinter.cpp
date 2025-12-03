@@ -24,7 +24,7 @@ static void HaruErrorHandler(HPDF_STATUS code, HPDF_STATUS detail, void*)
     throw std::runtime_error(buf);
 }
 
-// Рисуем QR-код в PDF
+// Рисуем qr код в pdf
 static void DrawQrOnPdf(HPDF_Page page, const std::string& textUtf8,
     float posX, float posY, float sizePt)
 {
@@ -109,7 +109,7 @@ static std::chrono::system_clock::time_point ParseDateIso(const std::string& iso
 }
 
 
-// ---------------- Печать билета ----------------
+// gечать билета 
 
 void PDFPrinter::PrintTicketForPassenger(const Passenger& p,
     const std::string& pdfPath) const
@@ -132,7 +132,7 @@ void PDFPrinter::PrintTicketForPassenger(const Passenger& p,
         HPDF_Page_SetWidth(page, 842);
         HPDF_Page_SetHeight(page, 300);
 
-        // ---------- читаем рейс из таблицы Flights ----------
+        //читаем рейс из таблицы Flights
         bool hasFlight = false;
         std::string fromAirport = "-";
         std::string toAirport = "-";
@@ -160,7 +160,7 @@ void PDFPrinter::PrintTicketForPassenger(const Passenger& p,
         }
         catch (...) {}
 
-        // ---------- верхняя синяя полоса ----------
+        //верхняя синяя полоса
         HPDF_Page_SetRGBFill(page, 0.1f, 0.3f, 0.7f);
         HPDF_Page_Rectangle(page, 0, 280, 842, 20);
         HPDF_Page_Fill(page);
@@ -171,7 +171,7 @@ void PDFPrinter::PrintTicketForPassenger(const Passenger& p,
         HPDF_Page_TextOut(page, 30, 250, u8"АВИАКОМПАНИЯ ИМЯ");
         HPDF_Page_EndText(page);
 
-        // ---------- Рейс, вылет, прибытие ----------
+        // Рейс вылет прибытие
         HPDF_Page_BeginText(page);
         HPDF_Page_SetFontAndSize(page, font, 14);
 
@@ -181,7 +181,7 @@ void PDFPrinter::PrintTicketForPassenger(const Passenger& p,
 
         HPDF_Page_EndText(page);
 
-        // ---------- Пассажир ----------
+        //Пассажир
         HPDF_Page_BeginText(page);
         HPDF_Page_SetFontAndSize(page, font, 16);
 
@@ -196,7 +196,7 @@ void PDFPrinter::PrintTicketForPassenger(const Passenger& p,
 
         HPDF_Page_EndText(page);
 
-        // ---------- QR ----------
+        //QR
         std::string route = hasFlight ?
             (fromAirport + "-" + toAirport) : "UNKNOWN";
 
@@ -225,11 +225,9 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
     const std::string& dateToIso,
     const std::string& pdfPath) const
 {
-    // 1) Готовим диапазон дат
     auto tpFrom = ParseDateIso(dateFromIso, false);
     auto tpTo = ParseDateIso(dateToIso, true);
 
-    // 2) Загружаем ВСЕ рейсы и фильтруем по времени вылета
     auto allFlights = Db::instance().QueryFlights();
     std::vector<Flight> flights;
     flights.reserve(allFlights.size());
@@ -239,8 +237,6 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
             flights.push_back(f);
         }
     }
-
-    // Сортируем по времени вылета, затем по номеру рейса
     std::sort(flights.begin(), flights.end(),
         [](const Flight& a, const Flight& b) {
             if (a.DEPARTURE_TIME != b.DEPARTURE_TIME)
@@ -248,7 +244,7 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
             return a.FLIGHTNUMBER < b.FLIGHTNUMBER;
         });
 
-    // 3) Создаём PDF
+    // Создаём pdf
     HPDF_Doc pdf = HPDF_New(HaruErrorHandler, nullptr);
     if (!pdf)
         throw std::runtime_error("Cannot create PDF");
@@ -296,14 +292,14 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
 
             // Период
             HPDF_Page_SetFontAndSize(page, font, 11);
-            float periodY = PAGE_H - 60.0f;     // ← ЧЁТКО под заголовком
+            float periodY = PAGE_H - 60.0f;     
             std::string period = u8"Период: " + dateFromIso + " — " + dateToIso;
             HPDF_Page_TextOut(page, LEFT, periodY, period.c_str());
 
             HPDF_Page_EndText(page);
 
-            // ↓↓↓ Здесь мы устанавливаем y ТОЛЬКО после периода!
-            y = periodY - 25.0f;    // ← расстояние между периодом и “Рейс …”
+ 
+            y = periodY - 25.0f;   
             };
 
 
@@ -312,11 +308,8 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
                 NewPage();
             }
             };
-
-        // Отрисовка шапки таблицы для конкретного рейса
         auto DrawPassengersHeader = [&](const Flight& flt) {
 
-            // Заголовок рейса
             HPDF_Page_BeginText(page);
             HPDF_Page_SetFontAndSize(page, font, 14);
 
@@ -338,7 +331,6 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
 
             y -= LINE_H * 1.5f;
 
-            // Шапка таблицы пассажиров
             HPDF_Page_BeginText(page);
             HPDF_Page_SetFontAndSize(page, font, 9);
 
@@ -353,7 +345,6 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
 
             y -= LINE_H * 1.0f;
 
-            // Линия под шапкой
             HPDF_Page_SetLineWidth(page, 0.5f);
             HPDF_Page_MoveTo(page, LEFT, y);
             HPDF_Page_LineTo(page, RIGHT, y);
@@ -362,7 +353,6 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
             y -= LINE_H * 0.8f;
             };
 
-        // Если рейсов нет — всё равно сформируем одну страницу с сообщением
         if (flights.empty()) {
             NewPage();
             HPDF_Page_BeginText(page);
@@ -376,15 +366,13 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
             return;
         }
 
-        // 4) Для каждого рейса — отдельный блок с пассажирами
         for (const auto& flt : flights) {
 
-            // Загружаем пассажиров данного рейса
             Passenger::Filter pf;
             pf.FlightNumber = flt.FLIGHTNUMBER;
             auto passengers = Db::instance().QueryPassengers(pf);
 
-            // Сортировка пассажиров по месту, а затем по ФИО
+            // Сортировка пассажиров по месту а затем по имени
             std::sort(passengers.begin(), passengers.end(),
                 [](const Passenger& a, const Passenger& b) {
                     if (a.SEATNUMBER != b.SEATNUMBER)
@@ -392,11 +380,8 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
                     return a.FULLNAME < b.FULLNAME;
                 });
 
-            // --- перед шапкой рейса: гарантируем место для шапки + хотя бы одной строки ---
-            // чтобы шапка не висела одна внизу страницы
             EnsureSpace(LINE_H * 6.0f);
 
-            // Заголовок рейса + шапка таблицы
             DrawPassengersHeader(flt);
 
             if (passengers.empty()) {
@@ -412,13 +397,10 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
 
             // Строки по пассажирам
             for (const auto& p : passengers) {
-                // запоминаем номер страницы до проверки места
                 int prevPageNo = pageNo;
 
-                // нужно место под строку + небольшой запас
                 EnsureSpace(LINE_H * 3.0f);
 
-                // если EnsureSpace создала новую страницу — перерисуем шапку рейса
                 if (pageNo != prevPageNo) {
                     DrawPassengersHeader(flt);
                 }
@@ -442,7 +424,6 @@ void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
 
                 HPDF_Page_EndText(page);
 
-                // увеличенный шаг между пассажирами
                 y -= LINE_H * 1.3f;
             }
 

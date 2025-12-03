@@ -15,9 +15,7 @@
 #include <algorithm>
 #include <cctype>
 
-// ----------------------------------------
-//  Диалог выбора рейса с поиском
-// ----------------------------------------
+
 class FlightSelectDialog : public wxDialog {
 public:
     FlightSelectDialog(wxWindow* parent,
@@ -35,7 +33,7 @@ public:
 
         BuildDisplayData();
 
-        // --- UI ---
+        // UI 
         auto* root = new wxBoxSizer(wxVERTICAL);
 
         auto* searchRow = new wxBoxSizer(wxHORIZONTAL);
@@ -62,7 +60,6 @@ public:
         SetSize(wxSize(550, 500));        
         Layout();
 
-        // начальный текст поиска
         search_->SetValue(initialQuery);
 
         // события
@@ -70,7 +67,6 @@ public:
         list_->Bind(wxEVT_LISTBOX_DCLICK, &FlightSelectDialog::OnListDClick, this);
         ok->Bind(wxEVT_BUTTON, &FlightSelectDialog::OnOK, this);
 
-        // первый прогон фильтрации
         ApplyFilter(initialQuery);
     }
 
@@ -90,7 +86,7 @@ private:
         std::string depCity;
         std::string arrCity;
         wxString    line;       // строка для списка
-        std::string lineUpper;  // та же строка в upper-case, для поиска
+        std::string lineUpper;  
     };
 
     wxTextCtrl* search_{};
@@ -115,7 +111,6 @@ private:
             df.depCity = depCode;
             df.arrCity = arrCode;
 
-            // Попробуем получить города по коду аэропорта
             try {
                 auto depList = Airport::Search(depCode);
                 if (!depList.empty())
@@ -145,7 +140,7 @@ private:
                 wxString::FromUTF8(arrTime)
             );
 
-            // подготовим upper-case версию строки для простого поиска
+            // upper-case 
             std::string u = std::string(df.line.mb_str());
             std::transform(u.begin(), u.end(), u.begin(),
                 [](unsigned char c) { return (char)std::toupper(c); });
@@ -175,10 +170,9 @@ private:
 
             bool match = false;
             if (qUpper.empty()) {
-                match = true;          // пустой запрос — показать всё
+                match = true;          // пустой запрос = показать всё
             }
             else {
-                // ищем подстроку в lineUpper (там и номер рейса, и города, и коды)
                 if (df.lineUpper.find(qUpper) != std::string::npos)
                     match = true;
             }
@@ -225,9 +219,7 @@ private:
     }
 };
 
-// ------------------------
-//  Обёртка ChooseFlight
-// ------------------------
+
 bool ChooseFlight(wxWindow* parent,
     const std::string& initialQuery,
     wxString& chosenFlight)

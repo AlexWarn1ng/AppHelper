@@ -4,7 +4,7 @@
 #include <iomanip>    
 #include <set>  
 #include <sstream>   
-// Вспомогательные функции для WHERE 
+// Вспомогательные функции для where  
 static std::string BuildWhere(const Passenger::Filter& f,
                               std::vector<std::string>& bindOrder)
 {
@@ -92,7 +92,6 @@ static void BindWhere(std::unique_ptr<sql::PreparedStatement>& ps,
 
 Db* Db::instance_ = nullptr;
 
-//Общедоступные статические
 void Db::init(const std::string& url,
               const std::string& user,
               const std::string& password,
@@ -108,7 +107,6 @@ Db& Db::instance()
     return *instance_;
 }
 
-// Конструктор/инфраструктура
 Db::Db(const std::string& url,
        const std::string& user,
        const std::string& password,
@@ -138,7 +136,6 @@ void Db::ensureConnected()
             conn_->setSchema(schema_);
         }
     } catch (...) {
-        // если драйвер бросил — переподключаемся
         conn_.reset(driver_->connect(url_, user_, password_));
         conn_->setSchema(schema_);
     }
@@ -158,7 +155,6 @@ std::unique_ptr<sql::PreparedStatement> Db::prepare(const std::string& sql)
     return std::unique_ptr<sql::PreparedStatement>(conn_->prepareStatement(sql));
 }
 
-// ПАССАЖИРЫ: SELECT / UPSERT
 std::vector<Passenger> Db::QueryPassengers(const Passenger::Filter& f)
 {
     std::lock_guard<std::mutex> lock(m_);
@@ -229,7 +225,6 @@ void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool
 
     conn_->setAutoCommit(false);
     try {
-        // Prepared: UPSERT
         auto up = std::unique_ptr<sql::PreparedStatement>(conn_->prepareStatement(
             "INSERT INTO passengers "
             "(PassengerID, FullName, DocNumber, FlightNumber, Baggage, Food, "
@@ -242,7 +237,6 @@ void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool
             " PhoneNumber=VALUES(PhoneNumber), Email=VALUES(Email)"
         ));
 
-        // Prepared: чтение текущего состояния по ключу
         std::unique_ptr<sql::PreparedStatement> sel;
         if (skipIdentical) {
             sel.reset(conn_->prepareStatement(
@@ -257,7 +251,6 @@ void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool
                 sel->setString(1, p.PASSENGERID);
                 std::unique_ptr<sql::ResultSet> rs(sel->executeQuery());
                 if (rs->next()) {
-                    // сравним все поля 1-в-1
                     bool identical =
                         (rs->isNull("FullName") ? p.FULLNAME.empty() : p.FULLNAME == rs->getString("FullName")) &&
                         (rs->isNull("DocNumber") ? p.DOCNUMBER.empty() : p.DOCNUMBER == rs->getString("DocNumber")) &&
@@ -269,11 +262,9 @@ void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool
                         (rs->isNull("Email") ? p.EMAIL.empty() : p.EMAIL == rs->getString("Email"));
 
                     if (identical) {
-                        // полностью совпадает — ничего не делаем
                         continue;
                     }
                 }
-                // если записи нет — пойдём на UPSERT (он сделает INSERT)
             }
 
             int i = 1;
@@ -330,8 +321,6 @@ void Db::DeletePassengers(const std::vector<std::string>& passengerIds)
     conn_->setAutoCommit(true);
 }
 
-// ------------------- Passenger / Aircraft helpers -------------------
-
 void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIdentical)
 {
     std::lock_guard<std::mutex> lock(m_);
@@ -339,7 +328,7 @@ void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIden
 
     conn_->setAutoCommit(false);
     try {
-        // UPSERT по FlightNumber
+     
         auto up = std::unique_ptr<sql::PreparedStatement>(conn_->prepareStatement(
             "INSERT INTO Flights "
             "(FlightNumber, DepartureAirport, ArrivalAirport, "
@@ -355,7 +344,6 @@ void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIden
             " Status          = VALUES(Status)"
         ));
 
-        // Если просили skipIdentical — подготовим селект для сравнения
         std::unique_ptr<sql::PreparedStatement> sel;
         if (skipIdentical) {
             sel.reset(conn_->prepareStatement(
@@ -371,7 +359,6 @@ void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIden
                 sel->setString(1, f.FLIGHTNUMBER);
                 std::unique_ptr<sql::ResultSet> rs(sel->executeQuery());
                 if (rs->next()) {
-                    // сравниваем все поля 1-в-1
                     bool identical =
                         (rs->isNull("DepartureAirport")
                             ? f.DEPARTURE_AIRPORT.empty()
@@ -392,11 +379,10 @@ void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIden
                             : f.STATUS == rs->getString("Status"));
 
                     if (identical) {
-                        // ничего не изменилось — пропускаем UPSERT
+                        
                         continue;
                     }
                 }
-                // если записи нет — просто пойдём на UPSERT (он сделает INSERT)
             }
 
             int i = 1;
@@ -558,7 +544,6 @@ void Flight::Validate() const
         throw std::runtime_error("Aircraft '" + AIRCRAFT_TYPE + "' not found");
 }
 
-// одиночный перерасчёт мест (может ещё где-то использоваться)
 void Flight::ComputeAvailableSeats()
 {
     auto totalByReg = Aircraft::LoadTotalSeatsByRegistration();
@@ -573,7 +558,6 @@ void Flight::ComputeAvailableSeats()
     AVAILABLE_SEATS = total - occupied;
 }
 
-// --------- валидация всего набора рейсов при импорте ---------
 
 static std::string TrimCopy(std::string s)
 {
@@ -592,7 +576,6 @@ void Flight::ValidateFlightsForImport(std::vector<Flight>& flights)
     if (flights.empty())
         return;
 
-    // 1. Берём все уже существующие FlightNumber из БД
     std::set<std::string> existing;
     {
         auto st = Db::instance().createStatement();
@@ -603,21 +586,18 @@ void Flight::ValidateFlightsForImport(std::vector<Flight>& flights)
         }
     }
 
-    // 2. Для контроля дублей внутри файла
     std::set<std::string> inFile;
 
     for (size_t i = 0; i < flights.size(); ++i) {
         Flight& f = flights[i];
-        int row = static_cast<int>(i) + 2; // строка в Excel (1 — заголовок)
+        int row = static_cast<int>(i) + 2; 
 
-        // --- нормализация строк ---
         f.FLIGHTNUMBER = TrimCopy(f.FLIGHTNUMBER);
         f.DEPARTURE_AIRPORT = TrimCopy(f.DEPARTURE_AIRPORT);
         f.ARRIVAL_AIRPORT = TrimCopy(f.ARRIVAL_AIRPORT);
         f.AIRCRAFT_TYPE = TrimCopy(f.AIRCRAFT_TYPE);
         f.STATUS = TrimCopy(f.STATUS);
 
-        // коды и номера делаем заглавными (если есть)
         auto toUpper = [](std::string& s) {
             for (char& ch : s)
                 ch = static_cast<char>(std::toupper((unsigned char)ch));
@@ -633,7 +613,6 @@ void Flight::ValidateFlightsForImport(std::vector<Flight>& flights)
                 ": FlightNumber is required.");
         }
 
-        // --- дубликаты внутри файла ---
         if (!inFile.insert(f.FLIGHTNUMBER).second) {
             throw std::runtime_error(
                 "Row " + std::to_string(row) +
@@ -641,7 +620,6 @@ void Flight::ValidateFlightsForImport(std::vector<Flight>& flights)
                 "' is duplicated in import file.");
         }
 
-        // --- уже существует в таблице flights ---
         if (existing.count(f.FLIGHTNUMBER)) {
             throw std::runtime_error(
                 "Row " + std::to_string(row) +
@@ -649,7 +627,6 @@ void Flight::ValidateFlightsForImport(std::vector<Flight>& flights)
                 "' already exists in table 'flights'.");
         }
 
-        // --- остальные проверки по ТЗ (формат, коды, время, самолёт) ---
         f.Validate();
     }
 }
@@ -689,7 +666,6 @@ void Flight::ComputeAvailableSeats(std::vector<Flight>& flights)
 }
 
 
-//AIRCRAFT CLASS
 std::map<std::string, int> Aircraft::LoadTotalSeatsByRegistration()
 {
     std::map<std::string, int> result;

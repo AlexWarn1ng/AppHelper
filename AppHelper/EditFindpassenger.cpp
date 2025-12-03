@@ -54,9 +54,6 @@ Employee::PassengerEditAudit Employee::PreparePassengerEditAudit(
     return a;
 }
 
-// ----------------------------------------------------------
-// Главное окно поиска / редактирования пассажиров
-// ----------------------------------------------------------
 
 class EditFindPassengerFrame : public wxFrame {
 public:
@@ -194,7 +191,6 @@ private:
     PDFPrinter  pdfPrinter_;
     std::vector<Passenger> snapshot_;
 
-    // ---------- постройка фильтра --------------
 
     Passenger::Filter BuildFilter() const {
         Passenger::Filter f;
@@ -221,14 +217,12 @@ private:
 
     static wxString BoolToCell(bool b) { return b ? "1" : "0"; }
 
-    // ---------- чтение пассажиров из грида + валидация -----------
 
     static std::vector<Passenger> CollectFromGrid(wxGrid* g) {
         std::vector<Passenger> out;
         int R = g->GetNumberRows();
         if (R == 0) return out;
 
-        // Подгружаем список допустимых FlightNumber из таблицы flights
         std::set<std::string> validFlights;
         {
             auto flights = Db::instance().QueryFlights();
@@ -240,7 +234,6 @@ private:
         for (int r = 0; r < R; ++r) {
             int rowNo = r + 1;
 
-            // Проверяем, не пустая ли вообще строка
             bool allEmpty = true;
             for (int c = 0; c < 9; ++c) {
                 if (!g->GetCellValue(r, c).Strip(wxString::both).IsEmpty()) {
@@ -249,12 +242,11 @@ private:
                 }
             }
             if (allEmpty) {
-                continue; // полностью пустые строки пропускаем
+                continue; 
             }
 
             Passenger p;
 
-            // 1) PassengerID — обязателен
             wxString pid = g->GetCellValue(r, 0).Strip(wxString::both);
             if (pid.IsEmpty()) {
                 throw AppException(
@@ -263,7 +255,6 @@ private:
             }
             p.PASSENGERID = std::string(pid.mb_str());
 
-            // 2) FullName — только буквы и пробелы, нормализация
             wxString full = g->GetCellValue(r, 1).Strip(wxString::both);
             if (full.IsEmpty()) {
                 throw AppException(
@@ -278,7 +269,6 @@ private:
             full = ErrorHandler::NormalizeFullName(full);
             p.FULLNAME = std::string(full.mb_str());
 
-            // 3) DocNumber — только буквы и цифры, без пробелов, upper
             wxString doc = g->GetCellValue(r, 2).Strip(wxString::both);
             if (!ErrorHandler::NormalizeDocNumber(doc)) {
                 throw AppException(
@@ -290,7 +280,6 @@ private:
             }
             p.DOCNUMBER = std::string(doc.mb_str());
 
-            // 4) FlightNumber — должен существовать в таблице flights
             wxString flt = g->GetCellValue(r, 3).Strip(wxString::both);
             if (flt.IsEmpty()) {
                 throw AppException(
@@ -308,11 +297,9 @@ private:
             }
             p.FLIGHTNUMBER = fltStd;
 
-            // 5) Baggage / Food — общая функция
             p.BAGGAGE = ErrorHandler::CellToBool(g->GetCellValue(r, 4));
             p.FOOD = ErrorHandler::CellToBool(g->GetCellValue(r, 5));
 
-            // 6) SeatNumber — как есть, но запрещаем плейсхолдер
             wxString seat = g->GetCellValue(r, 6).Strip(wxString::both);
             if (seat == "Choose seat!") {
                 throw AppException(
@@ -324,7 +311,6 @@ private:
             }
             p.SEATNUMBER = std::string(seat.mb_str());
 
-            // 7) PhoneNumber — обязателен, +7XXXXXXXXXX
             wxString phone = g->GetCellValue(r, 7).Strip(wxString::both);
             if (!ErrorHandler::IsValidPhone(phone)) {
                 throw AppException(
@@ -336,7 +322,6 @@ private:
             }
             p.PHONENUMBER = std::string(phone.mb_str());
 
-            // 8) Email — формат user@host.domain
             wxString email = g->GetCellValue(r, 8).Strip(wxString::both);
             if (!ErrorHandler::IsValidEmail(email)) {
                 throw AppException(
@@ -354,7 +339,6 @@ private:
         return out;
     }
 
-    // ---------- заполнение грида --------------
 
     void FillGrid(const std::vector<Passenger>& rows) {
         grid_->ClearGrid();
@@ -390,7 +374,6 @@ private:
         }
     }
 
-    // ---------- вспомогательный getter пассажира для печати --------
 
     Passenger GetPassengerFromRow(int r) const {
         Passenger p;
@@ -407,7 +390,6 @@ private:
         return p;
     }
 
-    // ---------- печать билета -----------
 
     void OnPrintTicket(wxCommandEvent&)
     {
@@ -477,7 +459,6 @@ private:
         }
     }
 
-    // ---------- удаление строк -----------
 
     void OnDelete(wxCommandEvent&)
     {
@@ -541,7 +522,6 @@ private:
         );
     }
 
-    // ---------- Find / Clear / Reload / Save -----------
 
     void OnFind(wxCommandEvent&) {
         try {
@@ -642,14 +622,12 @@ private:
         }
     }
 
-    // ---------- двойной клик по гриду (выбор рейса/места) ----------
 
     void OnGridCellDClick(wxGridEvent& e)
     {
         int row = e.GetRow();
         int col = e.GetCol();
 
-        // выбор рейса
         if (col == 3) {
             wxString currentFlt = grid_->GetCellValue(row, 3).Strip(wxString::both);
 
@@ -666,7 +644,6 @@ private:
             return;
         }
 
-        // выбор места
         if (col == 6) {
             wxString flt = grid_->GetCellValue(row, 3).Strip(wxString::both);
             if (flt.IsEmpty()) {

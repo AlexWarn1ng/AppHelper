@@ -12,16 +12,12 @@
 #include <iomanip>
 #include "FlightImportExport.h"   
 
-// ==== маленькие хелперы валидации (скопированы с пассажиров) =====
-
-// простая проверка строки (ФИО, модель и т.п.)
+// простая проверка строки 
 static bool IsNonEmpty(const wxString& s) {
     wxString v = s;
     v.Trim(true).Trim(false);
     return !v.IsEmpty();
 }
-
-// ================ Перечисление, что редактируем ===================
 
 enum class RefKind {
     Employees,
@@ -39,8 +35,6 @@ static const char* RefKindToString(RefKind k) {
     }
     return "";
 }
-
-// ======================= Главное окно ==============================
 
 class AdminRefEditFrame : public wxFrame {
 public:
@@ -88,7 +82,6 @@ public:
 
         panel->SetSizer(root);
 
-        // бинды
         choice_->Bind(wxEVT_CHOICE, &AdminRefEditFrame::OnKindChanged, this);
         reloadBtn->Bind(wxEVT_BUTTON, &AdminRefEditFrame::OnReload, this);
         addBtn->Bind(wxEVT_BUTTON, &AdminRefEditFrame::OnAddRow, this);
@@ -107,13 +100,11 @@ private:
 
     RefKind currentKind_{ RefKind::Employees };
 
-    // снимок данных "до" — нужен для удаления
     std::vector<int>           employeesBeforeIds_;
     std::vector<std::string>   aircraftBeforeRegs_;
     std::vector<std::string>   airportsBeforeIata_;
     std::vector<std::string>   flightsBeforeNumbers_;
 
-    // ---------------- Общие обработчики ------------------
 
     void ClearError() { errorLabel_->SetLabel(""); }
 
@@ -132,7 +123,6 @@ private:
         ClearError();
         int rows = grid_->GetNumberRows();
         grid_->AppendRows(1);
-        // для новых строк просто оставляем пустые значения
         grid_->SetGridCursor(rows, 0);
     }
 
@@ -145,7 +135,6 @@ private:
             return;
         }
 
-        // --- подтверждение ---
         int rc = wxMessageBox(
             wxString::Format("Delete %u selected row(s)?", sel.GetCount()),
             "Confirm delete",
@@ -154,7 +143,6 @@ private:
         if (rc != wxYES)
             return;
 
-        // удаляем с конца, чтобы индексы не поехали
         for (int i = (int)sel.GetCount() - 1; i >= 0; --i) {
             grid_->DeleteRows(sel[i]);
         }
@@ -192,7 +180,6 @@ private:
         }
     }
 
-    // ================= EMPLOYEES ======================
 
     void SetupEmployeesGrid() {
         grid_->ClearGrid();
@@ -209,7 +196,6 @@ private:
         grid_->SetColLabelValue(4, "Email");
         grid_->SetColLabelValue(5, "FullName");
 
-        // делаем колонку EmployeeID только для чтения
         auto* attrId = new wxGridCellAttr();
         attrId->SetReadOnly(true);
         attrId->SetBackgroundColour(*wxLIGHT_GREY);
@@ -260,7 +246,6 @@ private:
             wxString email = grid_->GetCellValue(r, 4).Strip(wxString::both);
             wxString fname = grid_->GetCellValue(r, 5).Strip(wxString::both);
 
-            // ----- простая валидация обязательных полей -----
             if (!IsNonEmpty(pass) || !IsNonEmpty(pos) || !IsNonEmpty(fname)) {
                 throw AppException(
                     "Employee row " + std::to_string(rowNo) +
@@ -268,7 +253,6 @@ private:
                 );
             }
 
-            // Position — только буквы/пробелы + нормализация (как ФИО)
             if (!ErrorHandler::IsLettersAndSpaces(pos)) {
                 throw AppException(
                     "Employee row " + std::to_string(rowNo) +
@@ -277,7 +261,6 @@ private:
             }
             pos = ErrorHandler::NormalizeFullName(pos);
 
-            // FullName — только буквы/пробелы + нормализация
             if (!ErrorHandler::IsLettersAndSpaces(fname)) {
                 throw AppException(
                     "Employee row " + std::to_string(rowNo) +
@@ -286,7 +269,6 @@ private:
             }
             fname = ErrorHandler::NormalizeFullName(fname);
 
-            // PhoneNumber — существующая проверка из ErrorHandler
             if (!phone.IsEmpty() && !ErrorHandler::IsValidPhone(phone)) {
                 throw AppException(
                     "Employee row " + std::to_string(rowNo) +
@@ -294,7 +276,6 @@ private:
                 );
             }
 
-            // Email — существующая проверка из ErrorHandler
             if (!email.IsEmpty() && !ErrorHandler::IsValidEmail(email)) {
                 throw AppException(
                     "Employee row " + std::to_string(rowNo) +
@@ -319,7 +300,7 @@ private:
                 ps->execute();
             }
             else {
-                // новый сотрудник: ID автоинкремент
+                // новый сотрудник id автоинкремент
                 auto ps = Db::instance().prepare(
                     "INSERT INTO employees (Password, Position, PhoneNumber, Email, FullName) "
                     "VALUES (?, ?, ?, ?, ?)");
@@ -332,7 +313,7 @@ private:
             }
         }
 
-        // DELETE — те ID, которых теперь нет
+        // DELETE те айди которых теперь нет
         for (int idOld : employeesBeforeIds_) {
             if (currentIds.find(idOld) == currentIds.end()) {
                 auto ps = Db::instance().prepare(
@@ -344,7 +325,6 @@ private:
     }
 
 
-    // ================= AIRCRAFTS =======================
 
     void SetupAircraftsGrid() {
         grid_->ClearGrid();
@@ -410,7 +390,6 @@ private:
         std::vector<RowData> parsed;
         parsed.reserve(rows);
 
-        // ----- сначала полностью валидируем и парсим все строки -----
         for (int r = 0; r < rows; ++r) {
             int rowNo = r + 1;
 
@@ -422,13 +401,12 @@ private:
             wxString fStr = grid_->GetCellValue(r, 5).Strip(wxString::both);
             wxString status = grid_->GetCellValue(r, 6).Strip(wxString::both);
 
-            // --- RegistrationNumber ---
+         
             if (reg.IsEmpty()) {
                 throw AppException("Aircraft row " + std::to_string(rowNo) +
                     ": RegistrationNumber is required.");
             }
 
-            // Разрешаем тире, но проверяем остальные символы той же функцией
             wxString regForCheck = reg;
             regForCheck.MakeUpper();
             regForCheck.Replace("-", "");
@@ -441,7 +419,6 @@ private:
             std::string regStd = std::string(reg.mb_str());
             currentRegs.insert(regStd);
 
-            // --- Model: буквы, цифры и ПРОБЕЛЫ допускаются ---
             if (model.IsEmpty()) {
                 throw AppException("Aircraft row " + std::to_string(rowNo) +
                     ": Model is required.");
@@ -452,10 +429,7 @@ private:
                         ": Model may contain only letters, digits and spaces.");
                 }
             }
-            // model оставляем в том виде, как ввёл пользователь
-            // (если хочешь, можно сделать model.MakeUpper() или NormalizeFullName)
 
-            // --- Status (как FullName: только буквы и пробелы, нормализация) ---
             if (!ErrorHandler::IsLettersAndSpaces(status)) {
                 throw AppException("Aircraft row " + std::to_string(rowNo) +
                     ": Status must contain only letters and spaces.");
@@ -500,7 +474,6 @@ private:
             parsed.push_back(std::move(d));
         }
 
-        // ----- если валидация прошла, применяем изменения к БД -----
         for (const auto& d : parsed) {
             if (d.existedBefore) {
                 auto ps = Db::instance().prepare(
@@ -533,7 +506,6 @@ private:
             }
         }
 
-        // DELETE
         for (const auto& regOld : aircraftBeforeRegs_) {
             if (currentRegs.find(regOld) == currentRegs.end()) {
                 auto ps = Db::instance().prepare(
@@ -547,7 +519,6 @@ private:
 
 
 
-    // ================= AIRPORTS ========================
 
     void SetupAirportsGrid() {
         grid_->ClearGrid();
@@ -614,7 +585,7 @@ private:
             double lat = wxAtof(latStr);
             double lon = wxAtof(lonStr);
 
-            // ВАЖНО: в std::string – UTF-8, а не mb_str()
+            // std::string – UTF-8, а не mb_str()
             std::string iataStd = std::string(iata.ToUTF8());
             currentIata.insert(iataStd);
 
@@ -660,9 +631,6 @@ private:
         }
     }
 
-
-
-    // ================= FLIGHTS =========================
 
     void SetupFlightsGrid() {
         grid_->ClearGrid();
@@ -747,7 +715,6 @@ private:
             wxString ac = grid_->GetCellValue(r, 5).Strip(wxString::both);
             wxString st = grid_->GetCellValue(r, 6).Strip(wxString::both);
 
-            // --- FlightNumber ---
             if (fn.IsEmpty()) {
                 throw AppException("Flight row " + std::to_string(rowNo) +
                     ": FlightNumber is required.");
@@ -761,7 +728,6 @@ private:
                 }
             }
 
-            // --- Departure / Arrival airport ---
             auto checkAirport = [&](wxString& code, const char* fieldName) {
                 if (code.IsEmpty()) {
                     throw AppException("Flight row " + std::to_string(rowNo) +
@@ -785,7 +751,6 @@ private:
             checkAirport(dep, "DepartureAirport");
             checkAirport(arr, "ArrivalAirport");
 
-            // --- Departure / Arrival time ---
             if (dt.IsEmpty() || at.IsEmpty()) {
                 throw AppException("Flight row " + std::to_string(rowNo) +
                     ": DepartureTime and ArrivalTime are required.");
@@ -793,7 +758,6 @@ private:
             auto depTime = WxToTimePoint(dt);
             auto arrTime = WxToTimePoint(at);
 
-            // --- AircraftType (как номер борта: буквы/цифры, допускаем '-') ---
             if (ac.IsEmpty()) {
                 throw AppException("Flight row " + std::to_string(rowNo) +
                     ": AircraftType is required.");
@@ -809,7 +773,6 @@ private:
                 }
             }
 
-            // --- Status (как имя: буквы + пробелы, но в БД храним в CAPS) ---
             if (!ErrorHandler::IsLettersAndSpaces(st)) {
                 throw AppException("Flight row " + std::to_string(rowNo) +
                     ": Status must contain only letters and spaces.");
@@ -826,7 +789,6 @@ private:
             fl.STATUS = std::string(st.mb_str());
             fl.AVAILABLE_SEATS = 0;  // пересчитается позже
 
-            // Используем существующую логику проверки рейса
             fl.Validate();
 
             RowInfo info;
@@ -840,19 +802,16 @@ private:
             currentNums.insert(fl.FLIGHTNUMBER);
         }
 
-        // пересчитываем AvailableSeats для всех рейсов
         std::vector<Flight> flightsForSeats;
         flightsForSeats.reserve(parsed.size());
         for (const auto& ri : parsed)
             flightsForSeats.push_back(ri.fl);
         Flight::ComputeAvailableSeats(flightsForSeats);
 
-        // копируем рассчитанные AVAILABLE_SEATS обратно
         for (size_t i = 0; i < parsed.size(); ++i) {
             parsed[i].fl.AVAILABLE_SEATS = flightsForSeats[i].AVAILABLE_SEATS;
         }
 
-        // ----- применяем изменения к БД: UPDATE / INSERT -----
         for (const auto& ri : parsed) {
             const Flight& fl = ri.fl;
 
@@ -892,7 +851,6 @@ private:
             }
         }
 
-        // ----- DELETE: удаляем рейсы, которых теперь нет в гриде -----
         for (const auto& oldFn : flightsBeforeNumbers_) {
             if (currentNums.find(oldFn) == currentNums.end()) {
                 auto ps = Db::instance().prepare(

@@ -149,7 +149,6 @@
     <ClInclude Include="SeatSelection.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="AppHelper.h" />
-    <ClInclude Include="WeatherForecast.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AdminEditor.cpp" />
@@ -164,7 +163,6 @@
     <ClCompile Include="PDFreport.cpp" />
     <ClCompile Include="RegisterPassenger.cpp" />
     <ClCompile Include="SeatSelection.cpp" />
-    <ClCompile Include="WeatherForecast.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="AppHelper.rc" />

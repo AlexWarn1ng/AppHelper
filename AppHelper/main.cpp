@@ -1,10 +1,9 @@
-#include <wx/wx.h>
+﻿#include <wx/wx.h>
 #include <wx/sizer.h>
 #include <wx/dcbuffer.h>
 #include <memory>
 #include "Header.h"
 #include "LoginDialog.h"
-#include "WeatherForecast.h"
 #include "PassengerImportExport.h"
 #include "FlightImportExport.h"
 #include "EditFindPassenger.h"
@@ -55,13 +54,6 @@ public:
         auto* grid = new wxGridSizer(1, 3, 16, 16);
 
         switch (sess.role) {
-        case Role::Pilot:
-        case Role::CoPilot: {
-            auto* b1 = new wxButton(body, wxID_ANY, "View weather forecast", wxDefaultPosition, wxSize(220, 48));
-            grid->Add(b1, 0, wxALIGN_CENTER);
-            b1->Bind(wxEVT_BUTTON, &MainFrame::OnPilotFlightPlan, this);
-            break;
-        }
 
         case Role::Receptionist: {
             auto* b1 = new wxButton(body, wxID_ANY, "Import/export from .xslx passengers", wxDefaultPosition, wxSize(220, 48));
@@ -83,13 +75,8 @@ public:
             break;
         }
 
-        case Role::Trainee: {
-            break;
-        }
-
         case Role::Unknown:
         default: {
-            wxMessageBox("You clicked 'Passenger manifest'", "Info", wxOK | wxICON_INFORMATION, this);
             break;
         }
         case Role::Admin: {
@@ -117,7 +104,6 @@ public:
 
 private:
     void OnAddPassenger(wxCommandEvent&) { ShowAddPassenger(this); }
-    void OnPilotFlightPlan(wxCommandEvent&) { ShowWeatherFrame(this); }
     void OnImportFromXSLX(wxCommandEvent&) { ShowPassengerImportExport(this); }
     void OnImportFromXSLXFLIGHTS(wxCommandEvent&) { ShowFlightImportExport(this); }
     void OnEditFindpassenger(wxCommandEvent&) { ShowEditFindPassenger(this); }
@@ -134,9 +120,18 @@ public:
             LoginDialog login(nullptr);
             if (login.ShowModal() != wxID_OK || !login.IsAuthenticated())
                 return false;
-            Session::I().userId = login.UserId();
-            Session::I().position = login.UserStatus();
-            Session::I().role = ParseRole(login.UserStatus());
+            auto& sess = Session::I();
+            sess.userId = login.UserId();
+            sess.role = ParseRole(login.UserStatus());
+            if (sess.role == Role::Receptionist) {     //ТУТ ИСПРАВЛЯЛ ПОКАЗ РОЛИ ЕСЛИ ЧТО МОЖЕТ БАГАТЬ
+                sess.position = "Receptionist";
+            }
+            else if (sess.role == Role::Admin) {
+                sess.position = "Admin";
+            }
+            else {
+                sess.position = "Unknown";
+            }
 
             auto* frame = new MainFrame();
             frame->Show();

@@ -30,7 +30,7 @@
 class Logger {
 public:
     static Logger& I() {
-        static Logger inst;
+        static Logger inst; // что бы ток 1 логгер был
         return inst;
     }
 
@@ -67,22 +67,20 @@ public:
 };
 
 enum class Role {
-    Pilot,
-    CoPilot,
     Receptionist,
-    Trainee,
-    Unknown,
-    Admin
+    Admin,
+    Unknown
 };
+
 inline Role ParseRole(const wxString& s) {
-    if (s == "Pilot")                          return Role::Pilot;
-    if (s == "Co-Pilot" || s == "CoPilot")     return Role::CoPilot;
-    if (s == "Receptionist")               return Role::Receptionist;
-    if (s == "TRAINEE" || s == "Trainee")      return Role::Trainee;
-    if (s == "ADMIN" || s == "Admin")      return Role::Admin;
+    if (s == "Receptionist")
+        return Role::Receptionist;
+    if (s == "ADMIN" || s == "Admin")
+        return Role::Admin;
 
     return Role::Unknown;
 }
+
 struct Session {
     wxString userId;
     wxString position;
@@ -90,10 +88,7 @@ struct Session {
     static Session& I() { static Session s; return s; }
     bool IsEmployee() const {
         switch (role) {
-        case Role::Pilot:
-        case Role::CoPilot:
         case Role::Receptionist:
-        case Role::Trainee:
         case Role::Admin:
             return true;
         default:
@@ -107,16 +102,8 @@ public:
     std::string FULLNAME;
     std::string EMAIL;
     std::string PHONENUMBER;
-
     Person() = default;
-
-    Person(std::string fullName,
-        std::string email,
-        std::string phone)
-        : FULLNAME(std::move(fullName)),
-        EMAIL(std::move(email)),
-        PHONENUMBER(std::move(phone))
-    {}
+    Person(std::string fullName, std::string email, std::string phone) : FULLNAME(std::move(fullName)), EMAIL(std::move(email)), PHONENUMBER(std::move(phone)){} // move для копирования
 };
 
 
