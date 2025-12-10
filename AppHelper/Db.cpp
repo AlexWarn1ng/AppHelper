@@ -5,9 +5,7 @@
 #include <set>  
 #include <sstream>   
 // Вспомогательные функции для where  
-static std::string BuildWhere(const Passenger::Filter& f,
-                              std::vector<std::string>& bindOrder)
-{
+static std::string BuildWhere(const Passenger::Filter& f, std::vector<std::string>& bindOrder) {
     if (f.empty()) return "";
     std::ostringstream w;
     w << " WHERE ";
@@ -19,42 +17,45 @@ static std::string BuildWhere(const Passenger::Filter& f,
         bindOrder.push_back(col);
     };
 
-    if (f.PassengerID)  add("PassengerID");
-    if (f.FullName)     add("FullName");
-    if (f.DocNumber)    add("DocNumber");
+    if (f.PassengerID) add("PassengerID");
+    if (f.FullName) add("FullName");
+    if (f.DocNumber) add("DocNumber");
     if (f.FlightNumber) add("FlightNumber");
-    if (f.SeatNumber)   add("SeatNumber");
-    if (f.Email)        add("Email");
-    if (f.PhoneNumber)  add("PhoneNumber");
-    if (f.Baggage)      add("Baggage");
-    if (f.Food)         add("Food");
-    for (auto& kv : f.extraEquals) add(kv.first);
-
+    if (f.SeatNumber) add("SeatNumber");
+    if (f.Email) add("Email");
+    if (f.PhoneNumber) add("PhoneNumber");
+    if (f.Baggage) add("Baggage");
+    if (f.Food) add("Food");
+    for (auto i = f.extraEquals.begin(); i != f.extraEquals.end(); ++i) //i тут типо указателя на ключ и значения типо город:москва
+    {
+        const std::string& columnName = i->first;
+        add(columnName);
+    }
     return w.str();
 }
 
-static void BindWhere(std::unique_ptr<sql::PreparedStatement>& ps,
-                      const Passenger::Filter& f,
-                      const std::vector<std::string>& order)
+static void BindWhere(std::unique_ptr<sql::PreparedStatement>& ps, const Passenger::Filter& f, const std::vector<std::string>& order)
 {
-    int idx = 1;
-    for (const auto& col : order) {
-        if      (col=="PassengerID")  ps->setString(idx++, *f.PassengerID);
-        else if (col=="FullName")     ps->setString(idx++, *f.FullName);
-        else if (col=="DocNumber")    ps->setString(idx++, *f.DocNumber);
-        else if (col=="FlightNumber") ps->setString(idx++, *f.FlightNumber);
-        else if (col=="SeatNumber")   ps->setString(idx++, *f.SeatNumber);
-        else if (col=="Email")        ps->setString(idx++, *f.Email);
-        else if (col=="PhoneNumber")  ps->setString(idx++, *f.PhoneNumber);
-        else if (col=="Baggage")      ps->setInt(idx++,  *(f.Baggage));
-        else if (col=="Food")         ps->setInt(idx++,  *(f.Food));
-        else                          ps->setString(idx++, f.extraEquals.at(col));
+    int id = 1;  // нумерация параметров начинается с 1
+
+    for (size_t i = 0; i < order.size(); ++i)
+    {
+        const std::string& col = order[i];  // col
+
+        if (col == "PassengerID")  ps->setString(id++, *f.PassengerID);
+        else if (col == "FullName") ps->setString(id++, *f.FullName);
+        else if (col == "DocNumber") ps->setString(id++, *f.DocNumber);
+        else if (col == "FlightNumber") ps->setString(id++, *f.FlightNumber);
+        else if (col == "SeatNumber") ps->setString(id++, *f.SeatNumber);
+        else if (col == "Email") ps->setString(id++, *f.Email);
+        else if (col == "PhoneNumber") ps->setString(id++, *f.PhoneNumber);
+        else if (col == "Baggage") ps->setInt(id++, *f.Baggage);
+        else if (col == "Food") ps->setInt(id++, *f.Food);
+        else ps->setString(id++, f.extraEquals.at(col));
     }
 }
 
-static std::string BuildWhere(const Flight::Filter& f,
-    std::vector<std::string>& bindOrder)
-{
+static std::string BuildWhere(const Flight::Filter& f, std::vector<std::string>& bindOrder) {
     if (f.empty()) return "";
     std::ostringstream w;
     w << " WHERE ";
@@ -64,159 +65,135 @@ static std::string BuildWhere(const Flight::Filter& f,
         first = false;
         w << col << " = ?";
         bindOrder.push_back(col);
-        };
+     };
 
-    if (f.FlightNumber)      add("FlightNumber");
-    if (f.DepartureAirport)  add("DepartureAirport");
-    if (f.ArrivalAirport)    add("ArrivalAirport");
-    if (f.AircraftType)      add("AircraftType");
-    if (f.Status)            add("Status");
+    if (f.FlightNumber) add("FlightNumber");
+    if (f.DepartureAirport) add("DepartureAirport");
+    if (f.ArrivalAirport) add("ArrivalAirport");
+    if (f.AircraftType)  add("AircraftType");
+    if (f.Status) add("Status");
 
     return w.str();
 }
 
-static void BindWhere(std::unique_ptr<sql::PreparedStatement>& ps,
-    const Flight::Filter& f,
-    const std::vector<std::string>& order)
-{
-    int idx = 1;
-    for (const auto& col : order) {
-        if (col == "FlightNumber")      ps->setString(idx++, *f.FlightNumber);
-        else if (col == "DepartureAirport")  ps->setString(idx++, *f.DepartureAirport);
-        else if (col == "ArrivalAirport")    ps->setString(idx++, *f.ArrivalAirport);
-        else if (col == "AircraftType")      ps->setString(idx++, *f.AircraftType);
-        else if (col == "Status")            ps->setString(idx++, *f.Status);
+static void BindWhere(std::unique_ptr<sql::PreparedStatement>& ps, const Flight::Filter& f, const std::vector<std::string>& order) {
+    int id = 1; 
+    for (size_t i = 0; i < order.size(); ++i)
+    {
+        const std::string& col = order[i];
+        if (col == "FlightNumber")      ps->setString(id++, *f.FlightNumber);
+        else if (col == "DepartureAirport")  ps->setString(id++, *f.DepartureAirport);
+        else if (col == "ArrivalAirport")    ps->setString(id++, *f.ArrivalAirport);
+        else if (col == "AircraftType")      ps->setString(id++, *f.AircraftType);
+        else if (col == "Status")            ps->setString(id++, *f.Status);
     }
 }
 
 
-Db* Db::instance_ = nullptr;
 
-void Db::init(const std::string& url,
-              const std::string& user,
-              const std::string& password,
-              const std::string& schema)
-{
-    if (instance_) return;
+Db* Db::instance_ = nullptr; //без _ жалуется на что то дурачок и это указтель
+
+void Db::init(const std::string& url, const std::string& user, const std::string& password, const std::string& schema){
+    if (instance_) return; // уже создан
     instance_ = new Db(url, user, password, schema);
 }
 
-Db& Db::instance()
-{
+Db& Db::instance(){
     if (!instance_) throw std::runtime_error("Db::init() was not called");
     return *instance_;
 }
 
-Db::Db(const std::string& url,
-       const std::string& user,
-       const std::string& password,
-       const std::string& schema)
-    : driver_(nullptr),
-      conn_(nullptr),
-      url_(url),
-      user_(user),
-      password_(password),
-      schema_(schema)
+Db::Db(const std::string& url, const std::string& user, const std::string& password, const std::string& schema)
+    : driver_(nullptr), conn_(nullptr), url_(url), user_(user), password_(password), schema_(schema)
 {
-    driver_ = get_driver_instance();
+    driver_ = get_driver_instance(); // Получил драйвер для создания соединений
     conn_.reset(driver_->connect(url_, user_, password_));
     conn_->setSchema(schema_);
 }
 
-void Db::ensureConnected()
-{
-    if (!conn_) {
+void Db::ensureConnected(){
+    if (!conn_) { // создаем
         conn_.reset(driver_->connect(url_, user_, password_));
         conn_->setSchema(schema_);
         return;
     }
-    try {
+    try { // перероверяем
         if (conn_->isClosed()) {
             conn_.reset(driver_->connect(url_, user_, password_));
             conn_->setSchema(schema_);
         }
-    } catch (...) {
+    } catch (...) { // если все плохо выкидвается ошибка
         conn_.reset(driver_->connect(url_, user_, password_));
         conn_->setSchema(schema_);
     }
 }
 
-std::unique_ptr<sql::Statement> Db::createStatement()
-{
+std::unique_ptr<sql::Statement> Db::createStatement(){
     std::lock_guard<std::mutex> lock(m_);
     ensureConnected();
     return std::unique_ptr<sql::Statement>(conn_->createStatement());
 }
 
-std::unique_ptr<sql::PreparedStatement> Db::prepare(const std::string& sql)
-{
+std::unique_ptr<sql::PreparedStatement> Db::prepare(const std::string& sql){
     std::lock_guard<std::mutex> lock(m_);
     ensureConnected();
     return std::unique_ptr<sql::PreparedStatement>(conn_->prepareStatement(sql));
 }
 
-std::vector<Passenger> Db::QueryPassengers(const Passenger::Filter& f)
-{
+std::vector<Passenger> Db::QueryPassengers(const Passenger::Filter& f) {    
     std::lock_guard<std::mutex> lock(m_);
     ensureConnected();
-
     std::vector<std::string> order;
     std::string where = BuildWhere(f, order);
-
     std::string sql =
-        "SELECT PassengerID, FullName, DocNumber, FlightNumber, "
-        "Baggage, Food, SeatNumber, PhoneNumber, Email "
+        "SELECT PassengerID, FullName, DocNumber, FlightNumber, " 
+       "Baggage, Food, SeatNumber, PhoneNumber, Email "
         "FROM passengers" + where + " ORDER BY PassengerID";
-
     auto ps = std::unique_ptr<sql::PreparedStatement>(conn_->prepareStatement(sql));
     BindWhere(ps, f, order);
     std::unique_ptr<sql::ResultSet> rs(ps->executeQuery());
-
     std::vector<Passenger> out;
     while (rs->next()) {
         Passenger p;
-        p.PASSENGERID  = rs->getString("PassengerID");
-        p.FULLNAME     = rs->isNull("FullName") ? "" : rs->getString("FullName");
-        p.DOCNUMBER    = rs->isNull("DocNumber") ? "" : rs->getString("DocNumber");
+        p.PASSENGERID = rs->getString("PassengerID");
+        p.FULLNAME = rs->isNull("FullName") ? "" : rs->getString("FullName");
+        p.DOCNUMBER = rs->isNull("DocNumber") ? "" : rs->getString("DocNumber");
         p.FLIGHTNUMBER = rs->isNull("FlightNumber") ? "" : rs->getString("FlightNumber");
-        p.BAGGAGE      = rs->getInt("Baggage") != 0;
-        p.FOOD         = rs->getInt("Food") != 0;
-        p.SEATNUMBER   = rs->isNull("SeatNumber") ? "" : rs->getString("SeatNumber");
-        p.PHONENUMBER  = rs->isNull("PhoneNumber") ? "" : rs->getString("PhoneNumber");
-        p.EMAIL        = rs->isNull("Email") ? "" : rs->getString("Email");
+        p.BAGGAGE = rs->getInt("Baggage") != 0;
+        p.FOOD = rs->getInt("Food") != 0;
+        p.SEATNUMBER = rs->isNull("SeatNumber") ? "" : rs->getString("SeatNumber");
+        p.PHONENUMBER = rs->isNull("PhoneNumber") ? "" : rs->getString("PhoneNumber");
+        p.EMAIL = rs->isNull("Email") ? "" : rs->getString("Email");
         out.push_back(std::move(p));
     }
     return out;
 }
 
-void Db::InsertOrUpdatePassenger(const Passenger& p)
-{
+void Db::InsertOrUpdatePassenger(const Passenger& p){
     std::lock_guard<std::mutex> lock(m_);
     ensureConnected();
-
     auto up = std::unique_ptr<sql::PreparedStatement>(conn_->prepareStatement(
         "INSERT INTO passengers "
-        "(PassengerID, FullName, DocNumber, FlightNumber, Baggage, Food, "
-        " SeatNumber, PhoneNumber, Email) "
-        "VALUES(?,?,?,?,?,?,?,?,?) "
+         "(PassengerID, FullName, DocNumber, FlightNumber, Baggage, Food, "
+         " SeatNumber, PhoneNumber, Email) "
+         "VALUES(?,?,?,?,?,?,?,?,?) "
         "ON DUPLICATE KEY UPDATE "
         " FullName=VALUES(FullName), DocNumber=VALUES(DocNumber), "
-        " FlightNumber=VALUES(FlightNumber), Baggage=VALUES(Baggage), "
+       " FlightNumber=VALUES(FlightNumber), Baggage=VALUES(Baggage), "
         " Food=VALUES(Food), SeatNumber=VALUES(SeatNumber), "
         " PhoneNumber=VALUES(PhoneNumber), Email=VALUES(Email)"
     ));
-
-    int i=1;
-    up->setString(i++, p.PASSENGERID);
-    up->setString(i++, p.FULLNAME);
-    up->setString(i++, p.DOCNUMBER);
-    up->setString(i++, p.FLIGHTNUMBER);
-    up->setInt   (i++, p.BAGGAGE ? 1 : 0);
-    up->setInt   (i++, p.FOOD ? 1 : 0);
-    up->setString(i++, p.SEATNUMBER);
-    up->setString(i++, p.PHONENUMBER);
-    up->setString(i++, p.EMAIL);
+    up->setString(1, p.PASSENGERID);
+    up->setString(2, p.FULLNAME);
+    up->setString(3, p.DOCNUMBER);
+    up->setString(4, p.FLIGHTNUMBER);
+    up->setInt(5, p.BAGGAGE ? 1 : 0);
+    up->setInt(6, p.FOOD ? 1 : 0);
+    up->setString(7, p.SEATNUMBER);
+    up->setString(8, p.PHONENUMBER);
+    up->setString(9, p.EMAIL);
     up->execute();
+
 }
 
 void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool skipIdentical) {
@@ -246,11 +223,13 @@ void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool
             ));
         }
 
-        for (const auto& p : passengers) {
+        for (size_t index = 0; index < passengers.size(); ++index){
+            const Passenger& p = passengers[index];
             if (skipIdentical) {
                 sel->setString(1, p.PASSENGERID);
                 std::unique_ptr<sql::ResultSet> rs(sel->executeQuery());
-                if (rs->next()) {
+                if (rs->next())
+                {
                     bool identical =
                         (rs->isNull("FullName") ? p.FULLNAME.empty() : p.FULLNAME == rs->getString("FullName")) &&
                         (rs->isNull("DocNumber") ? p.DOCNUMBER.empty() : p.DOCNUMBER == rs->getString("DocNumber")) &&
@@ -261,25 +240,21 @@ void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool
                         (rs->isNull("PhoneNumber") ? p.PHONENUMBER.empty() : p.PHONENUMBER == rs->getString("PhoneNumber")) &&
                         (rs->isNull("Email") ? p.EMAIL.empty() : p.EMAIL == rs->getString("Email"));
 
-                    if (identical) {
+                    if (identical)
                         continue;
-                    }
                 }
             }
-
-            int i = 1;
-            up->setString(i++, p.PASSENGERID);
-            up->setString(i++, p.FULLNAME);
-            up->setString(i++, p.DOCNUMBER);
-            up->setString(i++, p.FLIGHTNUMBER);
-            up->setInt(i++, p.BAGGAGE ? 1 : 0);
-            up->setInt(i++, p.FOOD ? 1 : 0);
-            up->setString(i++, p.SEATNUMBER);
-            up->setString(i++, p.PHONENUMBER);
-            up->setString(i++, p.EMAIL);
+            up->setString(1, p.PASSENGERID);
+            up->setString(2, p.FULLNAME);
+            up->setString(3, p.DOCNUMBER);
+            up->setString(4, p.FLIGHTNUMBER);
+            up->setInt(5, p.BAGGAGE ? 1 : 0);
+            up->setInt(6, p.FOOD ? 1 : 0);
+            up->setString(7, p.SEATNUMBER);
+            up->setString(8, p.PHONENUMBER);
+            up->setString(9, p.EMAIL);
             up->execute();
         }
-
         conn_->commit();
     }
     catch (...) {
@@ -305,12 +280,11 @@ void Db::DeletePassengers(const std::vector<std::string>& passengerIds)
                 "DELETE FROM passengers WHERE PassengerID = ?"
             )
         );
-
-        for (const auto& id : passengerIds) {
-            ps->setString(1, id);
+        for (size_t i = 0; i < passengerIds.size(); i++)
+        {
+            ps->setString(1, passengerIds[i]);
             ps->execute();
         }
-
         conn_->commit();
     }
     catch (...) {
@@ -321,14 +295,11 @@ void Db::DeletePassengers(const std::vector<std::string>& passengerIds)
     conn_->setAutoCommit(true);
 }
 
-void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIdentical)
-{
+void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIdentical) {
     std::lock_guard<std::mutex> lock(m_);
     ensureConnected();
-
     conn_->setAutoCommit(false);
     try {
-     
         auto up = std::unique_ptr<sql::PreparedStatement>(conn_->prepareStatement(
             "INSERT INTO Flights "
             "(FlightNumber, DepartureAirport, ArrivalAirport, "
@@ -343,7 +314,6 @@ void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIden
             " AvailableSeats  = VALUES(AvailableSeats), "
             " Status          = VALUES(Status)"
         ));
-
         std::unique_ptr<sql::PreparedStatement> sel;
         if (skipIdentical) {
             sel.reset(conn_->prepareStatement(
@@ -353,50 +323,36 @@ void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIden
                 "FROM Flights WHERE FlightNumber = ?"
             ));
         }
-
-        for (const auto& f : flights) {
+        for (size_t id = 0; id < flights.size(); ++id){
+            const Flight& f = flights[id];
             if (skipIdentical) {
                 sel->setString(1, f.FLIGHTNUMBER);
                 std::unique_ptr<sql::ResultSet> rs(sel->executeQuery());
                 if (rs->next()) {
                     bool identical =
-                        (rs->isNull("DepartureAirport")
-                            ? f.DEPARTURE_AIRPORT.empty()
-                            : f.DEPARTURE_AIRPORT == rs->getString("DepartureAirport")) &&
-                        (rs->isNull("ArrivalAirport")
-                            ? f.ARRIVAL_AIRPORT.empty()
-                            : f.ARRIVAL_AIRPORT == rs->getString("ArrivalAirport")) &&
-                        (ErrorHandler::TimePointToString(f.DEPARTURE_TIME)
-                            == rs->getString("DepartureTime")) &&
-                        (ErrorHandler::TimePointToString(f.ARRIVAL_TIME)
-                            == rs->getString("ArrivalTime")) &&
-                        (rs->isNull("AircraftType")
-                            ? f.AIRCRAFT_TYPE.empty()
-                            : f.AIRCRAFT_TYPE == rs->getString("AircraftType")) &&
+                        (rs->isNull("DepartureAirport") ? f.DEPARTURE_AIRPORT.empty() : f.DEPARTURE_AIRPORT == rs->getString("DepartureAirport")) &&
+                        (rs->isNull("ArrivalAirport") ? f.ARRIVAL_AIRPORT.empty() : f.ARRIVAL_AIRPORT == rs->getString("ArrivalAirport")) &&
+                        (ErrorHandler::TimePointToString(f.DEPARTURE_TIME) == rs->getString("DepartureTime")) &&
+                        (ErrorHandler::TimePointToString(f.ARRIVAL_TIME) == rs->getString("ArrivalTime")) &&
+                        (rs->isNull("AircraftType") ? f.AIRCRAFT_TYPE.empty() : f.AIRCRAFT_TYPE == rs->getString("AircraftType")) &&
                         (rs->getInt("AvailableSeats") == f.AVAILABLE_SEATS) &&
-                        (rs->isNull("Status")
-                            ? f.STATUS.empty()
-                            : f.STATUS == rs->getString("Status"));
-
+                        (rs->isNull("Status") ? f.STATUS.empty() : f.STATUS == rs->getString("Status"));
                     if (identical) {
                         
                         continue;
                     }
                 }
             }
-
-            int i = 1;
-            up->setString(i++, f.FLIGHTNUMBER);
-            up->setString(i++, f.DEPARTURE_AIRPORT);
-            up->setString(i++, f.ARRIVAL_AIRPORT);
-            up->setString(i++, ErrorHandler::TimePointToString(f.DEPARTURE_TIME));
-            up->setString(i++, ErrorHandler::TimePointToString(f.ARRIVAL_TIME));
-            up->setString(i++, f.AIRCRAFT_TYPE);
-            up->setInt(i++, f.AVAILABLE_SEATS);
-            up->setString(i++, f.STATUS);
+            up->setString(1, f.FLIGHTNUMBER);
+            up->setString(2, f.DEPARTURE_AIRPORT);
+            up->setString(3, f.ARRIVAL_AIRPORT);
+            up->setString(4, ErrorHandler::TimePointToString(f.DEPARTURE_TIME));
+            up->setString(5, ErrorHandler::TimePointToString(f.ARRIVAL_TIME));
+            up->setString(6, f.AIRCRAFT_TYPE);
+            up->setInt(7, f.AVAILABLE_SEATS);
+            up->setString(8, f.STATUS);
             up->execute();
         }
-
         conn_->commit();
     }
     catch (...) {
@@ -476,7 +432,7 @@ std::map<std::string, int> Passenger::LoadOccupiedSeatsByFlight()
     return result;
 }
 
-//FLIGHT CLASS
+//FLIGHT класса методы
 
 bool Flight::IsValidFlightNumberFormat(const std::string& fn)
 {
@@ -544,7 +500,7 @@ void Flight::Validate() const
         throw std::runtime_error("Aircraft '" + AIRCRAFT_TYPE + "' not found");
 }
 
-void Flight::ComputeAvailableSeats()
+void Flight::ComputeAvailableSeats() // для 1 рейса
 {
     auto totalByReg = Aircraft::LoadTotalSeatsByRegistration();
     auto occ = Passenger::LoadOccupiedSeatsByFlight();
@@ -571,8 +527,7 @@ static std::string TrimCopy(std::string s)
     return std::string(it1, it2);
 }
 
-void Flight::ValidateFlightsForImport(std::vector<Flight>& flights)
-{
+void Flight::ValidateFlightsForImport(std::vector<Flight>& flights){
     if (flights.empty())
         return;
 
@@ -632,7 +587,7 @@ void Flight::ValidateFlightsForImport(std::vector<Flight>& flights)
 }
 
 
-void Flight::ComputeAvailableSeats(std::vector<Flight>& flights)
+void Flight::ComputeAvailableSeats(std::vector<Flight>& flights) // Для отображения рейса на экране
 {
     if (flights.empty())
         return;
@@ -665,6 +620,7 @@ void Flight::ComputeAvailableSeats(std::vector<Flight>& flights)
     }
 }
 
+//айеркрафт
 
 std::map<std::string, int> Aircraft::LoadTotalSeatsByRegistration()
 {

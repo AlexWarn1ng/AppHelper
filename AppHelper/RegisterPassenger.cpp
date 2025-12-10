@@ -1,5 +1,4 @@
-﻿// AddPassenger.cpp
-#include "Header.h"
+﻿#include "Header.h"
 #include "RegisterPassenger.h"
 #include "SeatSelection.h"
 #include "FlightSelection.h"
@@ -14,8 +13,6 @@
 #include <set>
 #include <sstream>
 #include <iomanip>
-
-// ---------------- автогенерация ID ----------------
 
 static int GetNextPassengerNumberFromDb()
 {
@@ -41,8 +38,6 @@ static std::string MakePassengerId(int num)
     return oss.str();
 }
 
-// =============================== ОКНО РЕГИСТРАЦИИ ПАССАЖИРА ===============================
-
 class AddPassengerFrame : public wxFrame {
 public:
     explicit AddPassengerFrame(wxWindow* parent = nullptr)
@@ -52,16 +47,16 @@ public:
         auto* panel = new wxPanel(this);
 
         fullName_ = new wxTextCtrl(panel, wxID_ANY);
-        docNumber_ = new wxTextCtrl(panel, wxID_ANY);
+        docNumber = new wxTextCtrl(panel, wxID_ANY);
 
-        flight_ = new wxTextCtrl(
+        flight = new wxTextCtrl(
             panel, wxID_ANY, "",
             wxDefaultPosition, wxDefaultSize,
             wxTE_PROCESS_ENTER
         );
         auto* chooseFlightBtn = new wxButton(panel, wxID_ANY, "...");
 
-        // seat_ только для отображения, выбор через кнопку
+        // seat_ только для отображения выбор через кнопку
         seat_ = new wxTextCtrl(
             panel, wxID_ANY, "",
             wxDefaultPosition, wxDefaultSize,
@@ -93,11 +88,11 @@ public:
         fg->Add(fullName_, 1, wxEXPAND);
 
         fg->Add(L("Document number:"), 0, wxALIGN_CENTER_VERTICAL);
-        fg->Add(docNumber_, 1, wxEXPAND);
+        fg->Add(docNumber, 1, wxEXPAND);
 
         fg->Add(L("Flight number:"), 0, wxALIGN_CENTER_VERTICAL);
         auto* flightRow = new wxBoxSizer(wxHORIZONTAL);
-        flightRow->Add(flight_, 1, wxEXPAND | wxRIGHT, 4);
+        flightRow->Add(flight, 1, wxEXPAND | wxRIGHT, 4);
         flightRow->Add(chooseFlightBtn, 0, wxALIGN_CENTER_VERTICAL);
         fg->Add(flightRow, 1, wxEXPAND);
 
@@ -143,14 +138,14 @@ public:
         clearBtn->Bind(wxEVT_BUTTON, &AddPassengerFrame::OnClear, this);
         closeBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(); });
         chooseFlightBtn->Bind(wxEVT_BUTTON, &AddPassengerFrame::OnChooseFlight, this);
-        flight_->Bind(wxEVT_TEXT_ENTER, &AddPassengerFrame::OnChooseFlight, this);
+        flight->Bind(wxEVT_TEXT_ENTER, &AddPassengerFrame::OnChooseFlight, this);
         chooseSeatBtn->Bind(wxEVT_BUTTON, &AddPassengerFrame::OnChooseSeat, this);
     }
 
 private:
     wxTextCtrl* fullName_{};
-    wxTextCtrl* docNumber_{};
-    wxTextCtrl* flight_{};
+    wxTextCtrl* docNumber{};
+    wxTextCtrl* flight{};
     wxTextCtrl* seat_{};
     wxTextCtrl* phone_{};
     wxTextCtrl* email_{};
@@ -159,8 +154,8 @@ private:
 
     void OnClear(wxCommandEvent&) {
         fullName_->Clear();
-        docNumber_->Clear();
-        flight_->Clear();
+        docNumber->Clear();
+        flight->Clear();
         seat_->Clear();
         phone_->Clear();
         email_->Clear();
@@ -174,11 +169,9 @@ private:
         bool ok = ErrorHandler::Try([&] {
             Passenger p;
 
-            // ---- PassengerID ----
             int nextNum = GetNextPassengerNumberFromDb();
             p.PASSENGERID = MakePassengerId(nextNum);
 
-            // ---- FullName ----
             wxString fullName = fullName_->GetValue();
             fullName = fullName.Strip(wxString::both);
             if (fullName.IsEmpty() || !ErrorHandler::IsLettersAndSpaces(fullName)) {
@@ -188,16 +181,13 @@ private:
             p.FULLNAME = std::string(fullName.mb_str());
 
 
-            // ---- DocNumber ----
-            wxString doc = docNumber_->GetValue();
+            wxString doc = docNumber->GetValue();
             if (!ErrorHandler::NormalizeDocNumber(doc)) {
                 throw AppException("DocNumber is required and must contain only letters and digits.");
             }
             p.DOCNUMBER = std::string(doc.mb_str());
 
-
-            // ---- FlightNumber ----
-            wxString flt = flight_->GetValue().Strip(wxString::both);
+            wxString flt = flight->GetValue().Strip(wxString::both);
             if (flt.IsEmpty())
                 throw AppException("FlightNumber is required.");
 
@@ -216,13 +206,11 @@ private:
             }
             p.FLIGHTNUMBER = fltStd;
 
-            // ---- Baggage / Food ----
             auto selB = baggage_->GetSelection();
             auto selF = food_->GetSelection();
             p.BAGGAGE = (selB == 1);
             p.FOOD = (selF == 1);
 
-            // ---- SeatNumber (может быть пустым, но если есть — валидируем) ----
             wxString seat = seat_->GetValue();
             if (!ErrorHandler::IsValidSeat(seat)) {
                 throw AppException("Seat must have format NNX, e.g. 12A.");
@@ -230,8 +218,6 @@ private:
             seat.MakeUpper();
             p.SEATNUMBER = std::string(seat.mb_str());
 
-
-            // ---- PhoneNumber ----
             wxString phone = phone_->GetValue().Strip(wxString::both);
             if (!ErrorHandler::IsValidPhone(phone)) {
                 throw AppException(
@@ -240,7 +226,6 @@ private:
             }
             p.PHONENUMBER = std::string(phone.mb_str());
 
-            // ---- Email ----
             wxString email = email_->GetValue().Strip(wxString::both);
             if (!ErrorHandler::IsValidEmail(email)) {
                 throw AppException(
@@ -249,10 +234,8 @@ private:
             }
             p.EMAIL = std::string(email.mb_str());
 
-            // ---- Запись в БД ----
             Db::instance().InsertOrUpdatePassenger(p);
 
-            // ---- Логирование ----
             auto& s = Session::I();
             std::string empId = std::string(s.userId.mb_str());
             std::string empPos = std::string(s.position.mb_str());
@@ -267,7 +250,7 @@ private:
                 "Register passenger",
                 wxOK | wxICON_INFORMATION, this);
 
-            OnClear(*(new wxCommandEvent)); // просто очистим форму
+            OnClear(*(new wxCommandEvent)); // чистка формы
 
             }, err);
 
@@ -280,7 +263,7 @@ private:
 
     void OnChooseFlight(wxCommandEvent&)
     {
-        wxString current = flight_->GetValue().Strip(wxString::both);
+        wxString current = flight->GetValue().Strip(wxString::both);
         std::string initialQuery = std::string(current.mb_str());
 
         wxString chosen;
@@ -288,7 +271,7 @@ private:
             return;
 
         if (!chosen.IsEmpty()) {
-            flight_->SetValue(chosen);
+            flight->SetValue(chosen);
         }
     }
 
@@ -296,13 +279,10 @@ private:
 
     void OnChooseSeat(wxCommandEvent&)
     {
-        // сперва проверим, что выбран рейс
-        wxString fltWx = flight_->GetValue().Strip(wxString::both);
+        // проверка выбран ли рейс
+        wxString fltWx = flight->GetValue().Strip(wxString::both);
         if (fltWx.IsEmpty()) {
-            wxMessageBox("Please enter/select FlightNumber first.",
-                "Choose seat",
-                wxOK | wxICON_WARNING,
-                this);
+            wxMessageBox("Please enter/select FlightNumber first.","Choose seat", wxOK | wxICON_WARNING, this);
             return;
         }
 
@@ -314,7 +294,7 @@ private:
         {
             seat_->SetValue(chosen);
         }
-        // если вернулось false — либо отмена, либо ошибка уже показана внутри
+        // если вернулось фолс то либо отмена либо ошибка уже показана внутри
     }
 
 };

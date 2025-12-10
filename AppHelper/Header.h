@@ -7,7 +7,6 @@
 #include <mutex>
 #include <optional>  
 #include <wx/stattext.h>
-#pragma once
 #include <vector>
 #include <optional>
 #include <map>
@@ -24,8 +23,7 @@
 #include <ctime>
 
 #include <wx/wx.h>
-
-
+//ON DUPLICATE KEY UPDATE → если ID существует → делаем UPDATE, если нет → INSERT.
 
 class Logger {
 public:
@@ -72,7 +70,7 @@ enum class Role {
     Unknown
 };
 
-inline Role ParseRole(const wxString& s) {
+inline Role ParseRole(const wxString& s) {// inline не убиратть что бы норм компилировалось он там что то типо с многократным опеределением делает
     if (s == "Receptionist")
         return Role::Receptionist;
     if (s == "ADMIN" || s == "Admin")
@@ -81,11 +79,15 @@ inline Role ParseRole(const wxString& s) {
     return Role::Unknown;
 }
 
-struct Session {
+class Session {
+public:
     wxString userId;
     wxString position;
     Role role{ Role::Unknown };
-    static Session& I() { static Session s; return s; }
+    static Session& I() { 
+   static Session s;
+        return s; 
+    }
     bool IsEmployee() const {
         switch (role) {
         case Role::Receptionist:
@@ -93,7 +95,7 @@ struct Session {
             return true;
         default:
             return false;
-        }
+         }
     }
 };
 
@@ -103,7 +105,7 @@ public:
     std::string EMAIL;
     std::string PHONENUMBER;
     Person() = default;
-    Person(std::string fullName, std::string email, std::string phone) : FULLNAME(std::move(fullName)), EMAIL(std::move(email)), PHONENUMBER(std::move(phone)){} // move для копирования
+    Person(std::string fullName, std::string email, std::string phone) : FULLNAME(fullName), EMAIL(email), PHONENUMBER(phone){} 
 };
 
 
@@ -112,8 +114,8 @@ public:
     std::string PASSENGERID;
     std::string DOCNUMBER;
     std::string FLIGHTNUMBER;
-    bool        BAGGAGE{};
-    bool        FOOD{};
+    bool BAGGAGE{};
+    bool FOOD{};
     std::string SEATNUMBER;
 
     struct Filter {
@@ -129,20 +131,13 @@ public:
         std::map<std::string, std::string> extraEquals;
 
         bool empty() const {
-            return !PassengerID && !FullName && !DocNumber && !FlightNumber &&
-                !SeatNumber && !Email && !PhoneNumber && !Baggage && !Food &&
-                extraEquals.empty();
+            return !PassengerID && !FullName && !DocNumber && !FlightNumber && !SeatNumber && !Email && !PhoneNumber && !Baggage && !Food && extraEquals.empty();
         }
     };
 
-    // эти три метода у тебя и так были объявлены
     static std::vector<Passenger> ReadFromXlsx(const std::string& path);
-    static void WriteToXlsx(const std::string& path,
-        const std::vector<Passenger>& passengers);
-    static std::vector<Passenger> FilterPassengers(const std::vector<Passenger>& all,
-        const Filter& filter);
-
-    // ВАЖНО: только объявление, без тела!
+    static void WriteToXlsx(const std::string& path, const std::vector<Passenger>& passengers);
+    static std::vector<Passenger> FilterPassengers(const std::vector<Passenger>& all, const Filter& filter); // Возвращает только строки по фильтру при экспорте импорте
     static std::map<std::string, int> LoadOccupiedSeatsByFlight();
 };
 
@@ -154,9 +149,8 @@ public:
     int ECONOMY_SEATS{};
     int BUSINESS_SEATS{};
     int FIRST_CLASS_SEATS{};
-    std::string STATUS; // "Available", "Maintenance", "In Flight"
+    std::string STATUS; 
 
-    // Только ОБЪЯВЛЕНИЯ методов (как ты просил)
     static std::map<std::string, int> LoadTotalSeatsByRegistration();
     static bool Exists(const std::string& registration);
     static int GetTotalSeats(const std::string& registration);
@@ -181,23 +175,16 @@ public:
         std::optional<std::string> Status;  
 
         bool empty() const {
-            return !FlightNumber &&
-                !DepartureAirport &&
-                !ArrivalAirport &&
-                !AircraftType &&
-                !Status;
+            return !FlightNumber && !DepartureAirport&& !ArrivalAirport && !AircraftType &&!Status;
         }
     };
 
     void Validate() const;
     void ComputeAvailableSeats();
-
     static void ValidateFlightsForImport(std::vector<Flight>& flights);
     static void ComputeAvailableSeats(std::vector<Flight>& flights);
-
     static bool IsValidFlightNumberFormat(const std::string& fn);
     static bool IsValidAirportCode(const std::string& code);
-
     bool IsValidRoute() const;
     bool IsValidTimes() const;
     bool IsValidAircraft() const;
@@ -206,15 +193,9 @@ public:
 
 class Db {
 public:
-    static void init(const std::string& url,
-        const std::string& user,
-        const std::string& password,
-        const std::string& schema);
-    static Db& instance();
-
+    static void init(const std::string& url, const std::string& user, const std::string& password, const std::string& schema); static Db& instance();
     std::unique_ptr<sql::Statement> createStatement();
     std::unique_ptr<sql::PreparedStatement> prepare(const std::string& sql);
-
     std::vector<Passenger> QueryPassengers(const Passenger::Filter& filter = {});
     void InsertOrUpdatePassenger(const Passenger& p);
     void InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool skipIdentical = true);
@@ -224,18 +205,15 @@ public:
 
 
 private:
-    Db(const std::string& url,
-        const std::string& user,
-        const std::string& password,
-        const std::string& schema);
-    Db(const Db&) = delete;
+    Db(const std::string& url, const std::string& user, const std::string& password, const std::string& schema);
+    Db(const Db&) = delete; // Что бы не копировать
     Db& operator=(const Db&) = delete;
 
     void ensureConnected();
 
     static Db* instance_;
-    sql::Driver* driver_;
-    std::unique_ptr<sql::Connection> conn_;
+    sql::Driver* driver_; // ссылка на класс который умеет создавать подключения
+    std::unique_ptr<sql::Connection> conn_; // указатель на объект соединения тоесть это соединение созданное через драйвер
     std::string url_, user_, password_, schema_;
     std::mutex m_;
 };
@@ -243,8 +221,7 @@ private:
 class Employee : public Person {
 public:
     Employee() = default;
-    Employee(wxString id, wxString position)
-        : id_(std::move(id)), position_(std::move(position)) {}
+    Employee(wxString id, wxString position) : id_(std::move(id)), position_(std::move(position)) {}
 
     const wxString& id() const { return id_; }
     const wxString& position() const { return position_; }
@@ -252,20 +229,17 @@ public:
     static std::optional<Employee> Authenticate(const wxString& employeeId, const wxString& plainPassword) {
         try {
             auto ps = Db::instance().prepare(
-                "SELECT EmployeeID, Position "
-                "FROM employees "
-                "WHERE EmployeeID = ? AND Password = ? "
-                "LIMIT 1"
+                "SELECT EmployeeID, Position FROM employees WHERE EmployeeID = ? AND Password = ? LIMIT 1"
             );
             ps->setString(1, std::string(employeeId.mb_str()));
             ps->setString(2, std::string(plainPassword.mb_str()));
-            std::unique_ptr<sql::ResultSet> rs(ps->executeQuery());
+            std::unique_ptr<sql::ResultSet> rs(ps->executeQuery()); //память надо освобождать 
             if (rs->next()) {
                 wxString id = wxString::FromUTF8(rs->getString("EmployeeID"));
                 wxString pos = wxString::FromUTF8(rs->getString("Position"));
                 return Employee{ id, pos };
             }
-            return std::nullopt; // esli ne nashel to ne iskluchenija
+            return std::nullopt; // esli ne nashel to net iskluchenija
         }
         catch (const sql::SQLException& e) {
             throw DatabaseException(e.what()); // error v sql stanovitsa svoim iskluchenijem
@@ -282,28 +256,23 @@ public:
         size_t rowsUpdated = 0;
         size_t rowsDeleted = 0;
         wxString ToString() const {
-            return wxString::Format(
-                "Audit: %s\nEmployee: %s (%s)\nBefore: %zu, After: %zu\nAdded: %zu, Updated: %zu, Deleted: %zu",
-                wxString::FromUTF8(auditId), employeeId, position,
-                rowsBefore, rowsAfter, rowsAdded, rowsUpdated, rowsDeleted
-            );
+            return wxString::Format( "Audit: %s\nEmployee: %s (%s)\nBefore: %zu, After: %zu\nAdded: %zu, Updated: %zu, Deleted: %zu", wxString::FromUTF8(auditId),
+                employeeId, position, rowsBefore, rowsAfter, rowsAdded, rowsUpdated, rowsDeleted);
         }
     };
-    PassengerEditAudit PreparePassengerEditAudit(const std::vector<Passenger>& before,
-        const std::vector<Passenger>& after) const;
+    PassengerEditAudit PreparePassengerEditAudit(const std::vector<Passenger>& before, const std::vector<Passenger>& after) const;
 
 private:
     wxString id_;
     wxString position_;
-    wxString fullName_;
-    wxString phoneNumber_;
-    wxString email_;
+    wxString fullName;
+    wxString phoneNumber;
+    wxString email;
 };
 
 class ErrorHandler {
 public:
-    template<typename F>
-    static auto Exec(F&& func, wxStaticText* errorLabel = nullptr) -> decltype(func()) {
+    template<typename F> static auto Exec(F&& func, wxStaticText* errorLabel = nullptr) -> decltype(func()) { // что бы остановить программу при ошибке и кидает искдючение
         try { return func(); }
         catch (const sql::SQLException& ex) {
             if (errorLabel) errorLabel->SetLabel(wxString::Format("Database error: %s", ex.what()));
@@ -319,16 +288,11 @@ public:
         }
     }
 
-    template<typename F>
-    static auto Auth(F&& func, wxStaticText* errorLabel = nullptr) -> decltype(func()) {
+    template<typename F>static auto Auth(F&& func, wxStaticText* errorLabel = nullptr) -> decltype(func()) {
         return Exec(std::forward<F>(func), errorLabel);
     }
 
-    template<typename F,
-        typename T = std::invoke_result_t<F>>
-        static std::optional<T> ExecOrError(F&& func,
-            std::string& err,
-            wxStaticText* errorLabel = nullptr)
+    template<typename F, typename T = std::invoke_result_t<F>> static std::optional<T> ExecOrError(F&& func, std::string& err, wxStaticText* errorLabel = nullptr) // Не кидает исключение
     {
         try {
             return std::optional<T>(std::forward<F>(func)());
@@ -351,8 +315,7 @@ public:
     }
 
     // Varik bez vozrashaemogo znachenija: true — ok, false —  oshubkaa v err
-    template<typename F>
-    static bool Try(F&& func, std::string& err, wxStaticText* errorLabel = nullptr)
+    template<typename F> static bool Try(F&& func, std::string& err, wxStaticText* errorLabel = nullptr)// Не кидает исключение
     {
         try { std::forward<F>(func)(); return true; }
         catch (const sql::SQLException& ex) {
@@ -368,12 +331,13 @@ public:
             err = "Unknown error."; return false;
         }
     }
+
     // vspomagatelnoje
     static bool IsValidPhone(const wxString& s) {
         wxString p = s;
         p.Trim(true).Trim(false);
         if (!p.StartsWith("+7")) return false;
-        if (p.length() != 12) return false; // +7 и 10 цифр
+        if (p.length() != 12) return false; // ято ьф был +7 и 10 цифр
         for (size_t i = 2; i < p.length(); ++i) {
             if (!wxIsdigit(p[i])) return false;
         }
@@ -406,7 +370,7 @@ public:
     }
 
     static wxString NormalizeFullName(wxString s) {
-        s.Trim(true).Trim(false); // удалить пробелы по краям
+        s.Trim(true).Trim(false); // удаление пробелов по краям 
         s.MakeLower();
         bool newWord = true;
         for (size_t i = 0; i < s.length(); ++i) {
@@ -489,8 +453,7 @@ public:
     static std::vector<Airport> Search(const std::string& userInput, wxStaticText* errorLabel = nullptr) {
         return ErrorHandler::Exec([&] {
             const std::string input = trim(userInput);
-            if (input.empty())
-                throw AppException("Please enter airport code, name, city, or country.");
+            if (input.empty()) throw AppException("Please enter airport code, name, city, or country.");
 
             const std::string upperInput = toUpper(input);
             bool isIATA = (upperInput.size() == 3 && isAlpha(upperInput));
@@ -498,20 +461,15 @@ public:
 
             std::string sql;
             if (isIATA) {
-                sql = "SELECT iata, icao, name, city, country, latitude, longitude "
-                    "FROM airports WHERE UPPER(iata) = ? LIMIT 1";
+                sql = "SELECT iata, icao, name, city, country, latitude, longitude FROM airports WHERE UPPER(iata) = ? LIMIT 1";
             }
             else if (isICAO) {
-                sql = "SELECT iata, icao, name, city, country, latitude, longitude "
-                    "FROM airports WHERE UPPER(icao) = ? LIMIT 1";
+                sql = "SELECT iata, icao, name, city, country, latitude, longitude FROM airports WHERE UPPER(icao) = ? LIMIT 1";
             }
             else {
-                sql = "SELECT iata, icao, name, city, country, latitude, longitude "
-                    "FROM airports "
-                    "WHERE LOWER(name) = ? OR LOWER(city) = ? OR LOWER(country) = ? "
-                    "   OR name LIKE ? OR city LIKE ? OR country LIKE ? "
-                    "ORDER BY city, name";
+                sql = "SELECT iata, icao, name, city, country, latitude, longitude FROM airports WHERE LOWER(name) = ? OR LOWER(city) = ? OR LOWER(country) = ? OR name LIKE ? OR city LIKE ? OR country LIKE ? ORDER BY city, name";
             }
+
 
             auto ps = Db::instance().prepare(sql);
 
@@ -582,21 +540,15 @@ private:
 class PDFPrinter
 {
 public:
-    // Конструктор принимает путь к TTF-шрифту
-    explicit PDFPrinter(const std::string& ttfPath);
+    // путь к шрифту
+    explicit PDFPrinter(const std::string& ttfPath); // еклипт что бы не создавался сам конструктор и что бы не было неявного преобразования 
 
-    // Напечатать посадочный талон для конкретного пассажира
-    // pdfPath — куда сохранить PDF
-    void PrintTicketForPassenger(const Passenger& p,
-        const std::string& pdfPath) const;
+    // pdfPath  куда сохранить 
+    void PrintTicketForPassenger(const Passenger& p, const std::string& pdfPath) const;
 
-    // Напечатать отчёт по пассажирам за период дат (включительно).
-    // Даты в формате "YYYY-MM-DD" (как wxDateTime::FormatISODate()).
-    void PrintPassengersReport(const std::string& dateFromIso,
-        const std::string& dateToIso,
-        const std::string& pdfPath) const;
+    // по пассажирам за период дат включительно
+    void PrintPassengersReport(const std::string& dateFromIso, const std::string& dateToIso, const std::string& pdfPath) const;
 
 private:
     std::string ttfPath_;
-    // НИКАКИХ HPDF_Page / HPDF_STATUS здесь больше нет
 };

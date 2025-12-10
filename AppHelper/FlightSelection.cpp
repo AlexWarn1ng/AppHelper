@@ -24,16 +24,15 @@ public:
             wxDefaultPosition, wxSize(500, 500),
             wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     {
-        // Загружаем рейсы из БД
-        flights_ = Db::instance().QueryFlights();
+        // Загружаем рейсы из бд
+        flights = Db::instance().QueryFlights();
 
-        if (flights_.empty()) {
+        if (flights.empty()) {
             throw AppException("There are no flights in database.");
         }
 
         BuildDisplayData();
 
-        // UI 
         auto* root = new wxBoxSizer(wxVERTICAL);
 
         auto* searchRow = new wxBoxSizer(wxHORIZONTAL);
@@ -75,9 +74,9 @@ public:
             selectionIndex_ >= (int)visibleIndexes_.size())
             return {};
         const auto idx = visibleIndexes_[selectionIndex_];
-        if (idx < 0 || idx >= (int)display_.size())
+        if (idx < 0 || idx >= (int)display.size())
             return {};
-        return display_[idx].flight.FLIGHTNUMBER;
+        return display[idx].flight.FLIGHTNUMBER;
     }
 
 private:
@@ -92,17 +91,17 @@ private:
     wxTextCtrl* search_{};
     wxListBox* list_{};
 
-    std::vector<Flight>       flights_;
-    std::vector<DisplayFlight> display_;
+    std::vector<Flight>       flights;
+    std::vector<DisplayFlight> display;
     std::vector<int>          visibleIndexes_;
     int                       selectionIndex_ = -1;
 
     void BuildDisplayData()
     {
-        display_.clear();
-        display_.reserve(flights_.size());
+        display.clear();
+        display.reserve(flights.size());
 
-        for (const auto& f : flights_) {
+        for (const auto& f : flights) {
             DisplayFlight df;
             df.flight = f;
 
@@ -140,13 +139,13 @@ private:
                 wxString::FromUTF8(arrTime)
             );
 
-            // upper-case 
+            // верх рег
             std::string u = std::string(df.line.mb_str());
             std::transform(u.begin(), u.end(), u.begin(),
                 [](unsigned char c) { return (char)std::toupper(c); });
             df.lineUpper = std::move(u);
 
-            display_.push_back(std::move(df));
+            display.push_back(std::move(df));
         }
     }
 
@@ -165,8 +164,8 @@ private:
         visibleIndexes_.clear();
         selectionIndex_ = -1;
 
-        for (int i = 0; i < (int)display_.size(); ++i) {
-            const auto& df = display_[i];
+        for (int i = 0; i < (int)display.size(); ++i) {
+            const auto& df = display[i];
 
             bool match = false;
             if (qUpper.empty()) {
@@ -197,7 +196,7 @@ private:
 
     void OnListDClick(wxCommandEvent&)
     {
-        // двойной клик == OK
+        // двойной клик это OK
         OnOKDummy();
     }
 
@@ -233,7 +232,7 @@ bool ChooseFlight(wxWindow* parent,
         FlightSelectDialog dlg(parent, initWx);
 
         if (dlg.ShowModal() != wxID_OK)
-            return; // Cancel — не считаем ошибкой
+            return; // Cancel  не ошибка
 
         std::string fn = dlg.SelectedFlightNumber();
         chosenFlight = wxString::FromUTF8(fn);

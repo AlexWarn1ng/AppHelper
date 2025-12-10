@@ -10,11 +10,7 @@
 #include <stdexcept>
 #include "FlightImportExport.h"
 
-// ====================== helpers: time <-> string =============================
-
-// формат для Excel и для записи в БД: "YYYY-MM-DD HH:MM"
-
-// строго парсим только формат "YYYY-MM-DD HH:MM"
+// YYYY-MM-DD HH:MM
 static std::chrono::system_clock::time_point StringToTimePoint(const std::string& s)
 {
     if (s.empty())
@@ -31,16 +27,12 @@ static std::chrono::system_clock::time_point StringToTimePoint(const std::string
     return std::chrono::system_clock::from_time_t(t);
 }
 
-// для записи в БД (можно тот же формат)
 std::string TimePointToSql(const std::chrono::system_clock::time_point& tp)
 {
-    return ErrorHandler::TimePointToString(tp); // достаточно
+    return ErrorHandler::TimePointToString(tp); // больше не надо если надо еще есть
 }
 
 
-// ====================== XLSX helpers for Flight ==============================
-
-// Фильтрация набора рейсов по Flight::Filter (как у пассажиров)
 static std::vector<Flight> FilterFlights(const std::vector<Flight>& all,
     const Flight::Filter& f)
 {
@@ -64,8 +56,6 @@ static std::vector<Flight> FilterFlights(const std::vector<Flight>& all,
     return out;
 }
 
-
-// В Excel храним ТОЛЬКО данные, которые пользователь заполняет руками.
 static void WriteFlightsToXlsx(const std::string& path,
     const std::vector<Flight>& flights)
 {
@@ -99,7 +89,7 @@ static void WriteFlightsToXlsx(const std::string& path,
         ws.cell(3, row).value(f.ARRIVAL_AIRPORT);
         ws.cell(4, row).value(ErrorHandler::TimePointToString(f.DEPARTURE_TIME));
         ws.cell(5, row).value(ErrorHandler::TimePointToString(f.ARRIVAL_TIME));
-        ws.cell(6, row).value(f.AIRCRAFT_TYPE);   // RegistrationNumber
+        ws.cell(6, row).value(f.AIRCRAFT_TYPE);   
         ws.cell(7, row).value(f.STATUS);
         ++row;
     }
@@ -113,7 +103,6 @@ static void WriteFlightsToXlsx(const std::string& path,
     wb.save(path);
 }
 
-// чтение рейсов из Excel (без валидации, просто парсинг)
 static std::vector<Flight> ReadFlightsFromXlsx(const std::string& path)
 {
     xlnt::workbook wb;
@@ -127,14 +116,12 @@ static std::vector<Flight> ReadFlightsFromXlsx(const std::string& path)
         if (!v.empty())
             col[v] = c;
     }
-
     auto strAt = [&](const char* name, int r) -> std::string {
         auto it = col.find(name);
         if (it == col.end())
             return "";
         return ws.cell(it->second, r).to_string();
         };
-
     std::vector<Flight> out;
     int rLast = ws.highest_row();
     for (int r = 2; r <= rLast; ++r) {
@@ -142,28 +129,20 @@ static std::vector<Flight> ReadFlightsFromXlsx(const std::string& path)
         f.FLIGHTNUMBER = strAt("FlightNumber", r);
         if (f.FLIGHTNUMBER.empty())
             continue; // пустая строка
-
         f.DEPARTURE_AIRPORT = strAt("DepartureAirport", r);
         f.ARRIVAL_AIRPORT = strAt("ArrivalAirport", r);
-
         auto depStr = strAt("DepartureTime", r);
         auto arrStr = strAt("ArrivalTime", r);
         if (!depStr.empty())
             f.DEPARTURE_TIME = StringToTimePoint(depStr);
         if (!arrStr.empty())
             f.ARRIVAL_TIME = StringToTimePoint(arrStr);
-
-        f.AIRCRAFT_TYPE = strAt("AircraftType", r); // RegistrationNumber
+        f.AIRCRAFT_TYPE = strAt("AircraftType", r); 
         f.STATUS = strAt("Status", r);
-
         out.push_back(std::move(f));
     }
     return out;
 }
-
-// ======================== Диалог ПРЕДПРОСМОТРА рейсов =======================
-// НИЧЕГО менять нельзя: ни редактировать, ни добавлять/удалять, ни выделять.
-
 class FlightsPreviewDialog : public wxDialog {
 public:
     FlightsPreviewDialog(wxWindow* parent,
@@ -190,7 +169,7 @@ public:
             grid_->SetColSize(c, 130);
         }
 
-        // делаем таблицу полностью read-only и без выделения
+        //таблица без выделения
         grid_->EnableEditing(false);
         grid_->SetSelectionMode(wxGrid::wxGridSelectNone);
         grid_->EnableDragRowSize(false);
@@ -228,22 +207,19 @@ public:
 
 private:
     wxGrid* grid_{};
-    std::vector<Flight> flights_;   // данные не меняются
+    std::vector<Flight> flights_;   
 
     void OnOK(wxCommandEvent&)
     {
-        // Ничего не пересчитываем, ничего не читаем из грида — он read-only.
         EndModal(wxID_OK);
     }
 };
 
-// =========================== Главное окно Flight IE ==========================
 
 class FlightIEFrame : public wxFrame {
 public:
     FlightIEFrame(wxWindow* p = nullptr)
-        : wxFrame(p, wxID_ANY, "Import / Export Flights (.xlsx)",
-            wxDefaultPosition, wxSize(520, 240))
+        : wxFrame(p, wxID_ANY, "Import / Export Flights (.xlsx)", wxDefaultPosition, wxSize(520, 240))
     {
         auto* panel = new wxPanel(this);
 
@@ -291,7 +267,7 @@ private:
         int sel = m_col->GetSelection();
         wxString v = m_val->GetValue();
 
-        // 0 — "no filter"
+        // 0 это без фильтра если
         if (sel <= 0 || v.IsEmpty())
             return f;
 
@@ -307,36 +283,28 @@ private:
         return f;
     }
 
-    // ------------------------ EXPORT (БЕЗ проверок) ------------------------
     void OnExport(wxCommandEvent&)
     {
         Flight::Filter f = MakeFilter();
 
-        wxFileDialog dlg(this, "Save Excel file", "", "flights.xlsx",
-            "Excel files (*.xlsx)|*.xlsx",
-            wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        wxFileDialog dlg(this, "Save Excel file", "", "flights.xlsx", "Excel files (*.xlsx)|*.xlsx",  wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (dlg.ShowModal() != wxID_OK)
             return;
 
         try {
             auto flights = Db::instance().QueryFlights(f);
             if (flights.empty()) {
-                // проверяем, пустая ли вообще таблица
+                //пустая ли таблица
                 auto all = Db::instance().QueryFlights(Flight::Filter{});
                 if (all.empty()) {
                     wxMessageBox(
-                        "The database returned 0 rows with no filter applied.\n\n"
-                        "Please check:\n"
-                        "• The correct schema is set in Db::init(...)\n"
-                        "• The 'Flights' table is not empty",
+                        "The database returned 0 rows with no filter applied.\n\n"  "Please check:\n"  "The correct schema is set in Db::init(...)\n"
+                        "The 'Flights' table is not empty",
                         "Nothing to export", wxOK | wxICON_INFORMATION, this);
                     return;
                 }
-
                 wxMessageBox(
-                    "No records found for the specified filter.\n"
-                    "Try clearing the 'Value' field or selecting 'no filter'.",
-                    "Nothing matched", wxOK | wxICON_INFORMATION, this);
+                    "No records found for the specified filter.\n" "Try clearing the 'Value' field or selecting 'no filter'.",  "Nothing matched", wxOK | wxICON_INFORMATION, this);
                 return;
             }
 
@@ -350,39 +318,30 @@ private:
         }
     }
 
-
-    // ------------------------ IMPORT (С проверками из классов) --------------
     void OnImport(wxCommandEvent&)
     {
-        wxFileDialog dlg(this, "Open Excel file", "", "",
-            "Excel files (*.xlsx)|*.xlsx",
-            wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        wxFileDialog dlg(this, "Open Excel file", "", "", "Excel files (*.xlsx)|*.xlsx", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (dlg.ShowModal() != wxID_OK)
             return;
 
         try {
             auto flights = ReadFlightsFromXlsx(std::string(dlg.GetPath().mb_str()));
             if (flights.empty()) {
-                wxMessageBox("File does not contain flights.",
-                    "Import", wxOK | wxICON_INFORMATION, this);
+                wxMessageBox("File does not contain flights.", "Import", wxOK | wxICON_INFORMATION, this);
                 return;
             }
 
-            // 1) Валидация по ТЗ (FlightNumber, аэропорты, время, AircraftType)
             Flight::ValidateFlightsForImport(flights);
 
-            // 2) Расчёт мест + проверка соответствия вместимости самолёта
             Flight::ComputeAvailableSeats(flights);
 
-            // 3) Предпросмотр ТОЛЬКО для просмотра, без правок
             {
                 FlightsPreviewDialog prev(this, flights, "Preview import");
-                if (prev.ShowModal() != wxID_OK)
+                if (prev.ShowModal() != wxID_OK) {
                     return;
-                // данные не меняются
+                }
             }
 
-            // 4) Если всё ок — пишем в БД
             auto up = Db::instance().prepare(
                 "INSERT INTO flights "
                 "(FlightNumber, DepartureAirport, ArrivalAirport, "
@@ -398,18 +357,20 @@ private:
                 " Status=VALUES(Status)"
             );
 
-            for (const auto& f : flights) {
-                int i = 1;
-                up->setString(i++, f.FLIGHTNUMBER);
-                up->setString(i++, f.DEPARTURE_AIRPORT);
-                up->setString(i++, f.ARRIVAL_AIRPORT);
-                up->setString(i++, TimePointToSql(f.DEPARTURE_TIME));
-                up->setString(i++, TimePointToSql(f.ARRIVAL_TIME));
-                up->setString(i++, f.AIRCRAFT_TYPE);
-                up->setInt(i++, f.AVAILABLE_SEATS);
-                up->setString(i++, f.STATUS);
+            for (size_t id = 0; id < flights.size(); ++id) {
+                const Flight& f = flights[id];
+
+                up->setString(1, f.FLIGHTNUMBER);
+                up->setString(2, f.DEPARTURE_AIRPORT);
+                up->setString(3, f.ARRIVAL_AIRPORT);
+                up->setString(4, TimePointToSql(f.DEPARTURE_TIME));
+                up->setString(5, TimePointToSql(f.ARRIVAL_TIME));
+                up->setString(6, f.AIRCRAFT_TYPE);
+                up->setInt(7, f.AVAILABLE_SEATS);
+                up->setString(8, f.STATUS);
                 up->execute();
             }
+
 
             wxMessageBox(wxString::Format("Imported %zu flights", flights.size()),
                 "Import", wxOK | wxICON_INFORMATION, this);

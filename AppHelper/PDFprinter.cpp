@@ -76,7 +76,7 @@ static void DrawQrOnPdf(HPDF_Page page, const std::string& textUtf8,
 }
 
 
-// "YYYY-MM-DD" -> time_point начала/конца дня
+// "YYYY-MM-DD" 
 static std::chrono::system_clock::time_point ParseDateIso(const std::string& iso,
     bool endOfDay)
 {
@@ -221,9 +221,7 @@ void PDFPrinter::PrintTicketForPassenger(const Passenger& p,
     }
 }
 
-void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso,
-    const std::string& dateToIso,
-    const std::string& pdfPath) const
+void PDFPrinter::PrintPassengersReport(const std::string& dateFromIso, const std::string& dateToIso, const std::string& pdfPath) const
 {
     auto tpFrom = ParseDateIso(dateFromIso, false);
     auto tpTo = ParseDateIso(dateToIso, true);
