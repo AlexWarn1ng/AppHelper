@@ -1,13 +1,11 @@
 ﻿#include "Header.h"
 #include "FlightSelection.h"
-
 #include <wx/sizer.h>
 #include <wx/textctrl.h>
 #include <wx/listbox.h>
 #include <wx/button.h>
 #include <wx/stattext.h>
 #include <wx/msgdlg.h>
-
 #include <chrono>
 #include <ctime>
 #include <vector>
@@ -18,12 +16,7 @@
 
 class FlightSelectDialog : public wxDialog {
 public:
-    FlightSelectDialog(wxWindow* parent,
-        const wxString& initialQuery)
-        : wxDialog(parent, wxID_ANY, "Flights",
-            wxDefaultPosition, wxSize(500, 500),
-            wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
-    {
+    FlightSelectDialog(wxWindow* parent, const wxString& initialQuery) : wxDialog(parent, wxID_ANY, "Flights",  wxDefaultPosition, wxSize(500, 500), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
         // Загружаем рейсы из бд
         flights = Db::instance().QueryFlights();
 
@@ -149,8 +142,7 @@ private:
         }
     }
 
-    void ApplyFilter(const wxString& qWx)
-    {
+    void ApplyFilter(const wxString& qWx) {
         wxString trimmed = qWx;
         trimmed.Trim(true).Trim(false);
 
@@ -189,28 +181,23 @@ private:
         }
     }
 
-    void OnSearchChanged(wxCommandEvent&)
-    {
+    void OnSearchChanged(wxCommandEvent&)  {
         ApplyFilter(search_->GetValue());
     }
 
-    void OnListDClick(wxCommandEvent&)
-    {
+    void OnListDClick(wxCommandEvent&) {
         // двойной клик это OK
-        OnOKDummy();
+        OnOKsamolet();
     }
 
-    void OnOK(wxCommandEvent&)
-    {
-        OnOKDummy();
+    void OnOK(wxCommandEvent&) {
+        OnOKsamolet();
     }
 
-    void OnOKDummy()
-    {
+    void OnOKsamolet() {
         int sel = list_->GetSelection();
         if (sel == wxNOT_FOUND || sel < 0 || sel >= (int)visibleIndexes_.size()) {
-            wxMessageBox("Please select a flight.",
-                "Flights", wxOK | wxICON_INFORMATION, this);
+            wxMessageBox("Please select a flight.", "Flights", wxOK | wxICON_INFORMATION, this);
             return;
         }
         selectionIndex_ = sel;

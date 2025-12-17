@@ -26,7 +26,7 @@ static std::string BuildWhere(const Passenger::Filter& f, std::vector<std::strin
     if (f.PhoneNumber) add("PhoneNumber");
     if (f.Baggage) add("Baggage");
     if (f.Food) add("Food");
-    for (auto i = f.extraEquals.begin(); i != f.extraEquals.end(); ++i) //i тут типо указателя на ключ и значения типо город:москва
+    for (auto i = f.dopEquals.begin(); i != f.dopEquals.end(); ++i) //i тут типо указателя на ключ и значения типо город:москва
     {
         const std::string& columnName = i->first;
         add(columnName);
@@ -51,7 +51,7 @@ static void BindWhere(std::unique_ptr<sql::PreparedStatement>& ps, const Passeng
         else if (col == "PhoneNumber") ps->setString(id++, *f.PhoneNumber);
         else if (col == "Baggage") ps->setInt(id++, *f.Baggage);
         else if (col == "Food") ps->setInt(id++, *f.Food);
-        else ps->setString(id++, f.extraEquals.at(col));
+        else ps->setString(id++, f.dopEquals.at(col));
     }
 }
 
@@ -99,7 +99,7 @@ void Db::init(const std::string& url, const std::string& user, const std::string
 }
 
 Db& Db::instance(){
-    if (!instance_) throw std::runtime_error("Db::init() was not called");
+    if (!instance_) throw std::runtime_error("Db not called");
     return *instance_;
 }
 
@@ -129,19 +129,19 @@ void Db::ensureConnected(){
 }
 
 std::unique_ptr<sql::Statement> Db::createStatement(){
-    std::lock_guard<std::mutex> lock(m_);
+    std::lock_guard<std::mutex> lock(mutexlock);
     ensureConnected();
     return std::unique_ptr<sql::Statement>(conn_->createStatement());
 }
 
 std::unique_ptr<sql::PreparedStatement> Db::prepare(const std::string& sql){
-    std::lock_guard<std::mutex> lock(m_);
+    std::lock_guard<std::mutex> lock(mutexlock);
     ensureConnected();
     return std::unique_ptr<sql::PreparedStatement>(conn_->prepareStatement(sql));
 }
 
 std::vector<Passenger> Db::QueryPassengers(const Passenger::Filter& f) {    
-    std::lock_guard<std::mutex> lock(m_);
+    std::lock_guard<std::mutex> lock(mutexlock);
     ensureConnected();
     std::vector<std::string> order;
     std::string where = BuildWhere(f, order);
@@ -170,7 +170,7 @@ std::vector<Passenger> Db::QueryPassengers(const Passenger::Filter& f) {
 }
 
 void Db::InsertOrUpdatePassenger(const Passenger& p){
-    std::lock_guard<std::mutex> lock(m_);
+    std::lock_guard<std::mutex> lock(mutexlock);
     ensureConnected();
     auto up = std::unique_ptr<sql::PreparedStatement>(conn_->prepareStatement(
         "INSERT INTO passengers "
@@ -197,7 +197,7 @@ void Db::InsertOrUpdatePassenger(const Passenger& p){
 }
 
 void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool skipIdentical) {
-    std::lock_guard<std::mutex> lock(m_);
+    std::lock_guard<std::mutex> lock(mutexlock);
     ensureConnected();
 
     conn_->setAutoCommit(false);
@@ -226,7 +226,7 @@ void Db::InsertOrUpdatePassengers(const std::vector<Passenger>& passengers, bool
         for (size_t index = 0; index < passengers.size(); ++index){
             const Passenger& p = passengers[index];
             if (skipIdentical) {
-                sel->setString(1, p.PASSENGERID);
+                sel->setString(1, p.PASSENGERID); // Подставляем искомый айди что бы чекнуть есть ли пассажир если есть то победа если не то поражение
                 std::unique_ptr<sql::ResultSet> rs(sel->executeQuery());
                 if (rs->next())
                 {
@@ -270,7 +270,7 @@ void Db::DeletePassengers(const std::vector<std::string>& passengerIds)
     if (passengerIds.empty())
         return;
 
-    std::lock_guard<std::mutex> lock(m_);
+    std::lock_guard<std::mutex> lock(mutexlock);
     ensureConnected();
 
     conn_->setAutoCommit(false);
@@ -296,7 +296,7 @@ void Db::DeletePassengers(const std::vector<std::string>& passengerIds)
 }
 
 void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIdentical) {
-    std::lock_guard<std::mutex> lock(m_);
+    std::lock_guard<std::mutex> lock(mutexlock);
     ensureConnected();
     conn_->setAutoCommit(false);
     try {
@@ -358,7 +358,7 @@ void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIden
     catch (...) {
         conn_->rollback();
         conn_->setAutoCommit(true);
-        throw;
+        throw; // для ошибки 
     }
     conn_->setAutoCommit(true);
 }
@@ -366,7 +366,7 @@ void Db::InsertOrUpdateFlights(const std::vector<Flight>& flights, bool skipIden
 
 std::vector<Flight> Db::QueryFlights(const Flight::Filter& filter)
 {
-    std::lock_guard<std::mutex> lock(m_);
+    std::lock_guard<std::mutex> lock(mutexlock);
     ensureConnected();
 
     std::vector<Flight> out;
@@ -403,7 +403,7 @@ std::vector<Flight> Db::QueryFlights(const Flight::Filter& filter)
         f.DEPARTURE_TIME = parseDT(rs->getString("DepartureTime"));
         f.ARRIVAL_TIME = parseDT(rs->getString("ArrivalTime"));
 
-        out.push_back(std::move(f));
+        out.push_back(std::move(f)); // move для особождения памяти f
     }
     return out;
 }

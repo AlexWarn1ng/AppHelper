@@ -13,10 +13,7 @@
 
 class GradientHeader : public wxPanel {
 public:
-    GradientHeader(wxWindow* p, const wxString& title, const wxString& subtitle,
-        const wxColour& c1 = wxColour(30, 64, 175),
-        const wxColour& c2 = wxColour(65, 105, 225))
-        : wxPanel(p, wxID_ANY), t(title), s(subtitle), C1(c1), C2(c2) {
+    GradientHeader(wxWindow* p, const wxString& title, const wxString& subtitle, const wxColour& c1 = wxColour(30, 64, 175), const wxColour& c2 = wxColour(65, 105, 225)) : wxPanel(p, wxID_ANY), t(title), s(subtitle), C1(c1), C2(c2) {
         SetMinSize(wxSize(-1, 96));
         SetBackgroundStyle(wxBG_STYLE_PAINT);
         Bind(wxEVT_PAINT, [this](wxPaintEvent&) {

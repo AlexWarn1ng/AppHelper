@@ -33,8 +33,7 @@ std::string TimePointToSql(const std::chrono::system_clock::time_point& tp)
 }
 
 
-static std::vector<Flight> FilterFlights(const std::vector<Flight>& all,
-    const Flight::Filter& f)
+static std::vector<Flight> FilterFlights(const std::vector<Flight>& all, const Flight::Filter& f)
 {
     if (f.empty()) return all;
 
@@ -56,8 +55,7 @@ static std::vector<Flight> FilterFlights(const std::vector<Flight>& all,
     return out;
 }
 
-static void WriteFlightsToXlsx(const std::string& path,
-    const std::vector<Flight>& flights)
+static void WriteFlightsToXlsx(const std::string& path, const std::vector<Flight>& flights)
 {
     xlnt::workbook wb;
     {
@@ -153,8 +151,8 @@ public:
             wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
         flights_(data)
     {
-        grid_ = new wxGrid(this, wxID_ANY);
-        grid_->CreateGrid(0, 7);
+        grid = new wxGrid(this, wxID_ANY);
+        grid->CreateGrid(0, 7);
         const char* H[] = {
             "FlightNumber",
             "DepartureAirport",
@@ -165,26 +163,26 @@ public:
             "Status"
         };
         for (int c = 0; c < 7; ++c) {
-            grid_->SetColLabelValue(c, H[c]);
-            grid_->SetColSize(c, 130);
+            grid->SetColLabelValue(c, H[c]);
+            grid->SetColSize(c, 130);
         }
 
         //таблица без выделения
-        grid_->EnableEditing(false);
-        grid_->SetSelectionMode(wxGrid::wxGridSelectNone);
-        grid_->EnableDragRowSize(false);
-        grid_->EnableDragGridSize(false);
+        grid->EnableEditing(false);
+        grid->SetSelectionMode(wxGrid::wxGridSelectNone);
+        grid->EnableDragRowSize(false);
+        grid->EnableDragGridSize(false);
 
-        grid_->AppendRows((int)flights_.size());
+        grid->AppendRows((int)flights_.size());
         for (int r = 0; r < (int)flights_.size(); ++r) {
             const auto& f = flights_[r];
-            grid_->SetCellValue(r, 0, f.FLIGHTNUMBER);
-            grid_->SetCellValue(r, 1, f.DEPARTURE_AIRPORT);
-            grid_->SetCellValue(r, 2, f.ARRIVAL_AIRPORT);
-            grid_->SetCellValue(r, 3, ErrorHandler::TimePointToString(f.DEPARTURE_TIME));
-            grid_->SetCellValue(r, 4, ErrorHandler::TimePointToString(f.ARRIVAL_TIME));
-            grid_->SetCellValue(r, 5, f.AIRCRAFT_TYPE); // регистрация
-            grid_->SetCellValue(r, 6, f.STATUS);
+            grid->SetCellValue(r, 0, f.FLIGHTNUMBER);
+            grid->SetCellValue(r, 1, f.DEPARTURE_AIRPORT);
+            grid->SetCellValue(r, 2, f.ARRIVAL_AIRPORT);
+            grid->SetCellValue(r, 3, ErrorHandler::TimePointToString(f.DEPARTURE_TIME));
+            grid->SetCellValue(r, 4, ErrorHandler::TimePointToString(f.ARRIVAL_TIME));
+            grid->SetCellValue(r, 5, f.AIRCRAFT_TYPE); // регистрация
+            grid->SetCellValue(r, 6, f.STATUS);
         }
 
         auto* btns = new wxStdDialogButtonSizer();
@@ -195,7 +193,7 @@ public:
         btns->Realize();
 
         auto* s = new wxBoxSizer(wxVERTICAL);
-        s->Add(grid_, 1, wxEXPAND | wxALL, 8);
+        s->Add(grid, 1, wxEXPAND | wxALL, 8);
         s->Add(btns, 0, wxEXPAND | wxALL, 8);
         SetSizerAndFit(s);
 
@@ -206,7 +204,7 @@ public:
     const std::vector<Flight>& Result() const { return flights_; }
 
 private:
-    wxGrid* grid_{};
+    wxGrid* grid{};
     std::vector<Flight> flights_;   
 
     void OnOK(wxCommandEvent&)

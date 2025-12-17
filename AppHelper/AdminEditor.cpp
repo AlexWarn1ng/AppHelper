@@ -21,10 +21,7 @@ static bool IsNonEmpty(const wxString& s) {
 
 class AdminRefEditFrame : public wxFrame {
 public:
-    explicit AdminRefEditFrame(wxWindow* parent = nullptr)
-        : wxFrame(parent, wxID_ANY, "Admin reference editor",
-            wxDefaultPosition, wxSize(900, 500))
-    {
+     AdminRefEditFrame(wxWindow* parent = nullptr) : wxFrame(parent, wxID_ANY, "Admin reference editor",wxDefaultPosition, wxSize(900, 500)) {
         auto* panel = new wxPanel(this);
         choice = new wxChoice(panel, wxID_ANY);
         choice->Append("Employees");  // 0
@@ -45,27 +42,27 @@ public:
         grid->EnableDragRowSize(true);
         grid->SetRowLabelSize(40);
         auto* topRow = new wxBoxSizer(wxHORIZONTAL);
-        topRow->Add(new wxStaticText(panel, wxID_ANY, "Reference:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-        topRow->Add(choice, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
-        topRow->Add(reloadBtn, 0, wxRIGHT, 4);
-        topRow->Add(addBtn, 0, wxRIGHT, 4);
-        topRow->Add(delBtn, 0, wxRIGHT, 4);
-        topRow->Add(saveBtn, 0, wxRIGHT, 4);
-        topRow->AddStretchSpacer(1);
-        topRow->Add(errorLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
-        auto* root = new wxBoxSizer(wxVERTICAL);
-        root->Add(topRow, 0, wxEXPAND | wxALL, 6);
-        root->Add(grid, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+         topRow->Add(new wxStaticText(panel, wxID_ANY, "Reference:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+         topRow->Add(choice, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+         topRow->Add(reloadBtn, 0, wxRIGHT, 4);
+         topRow->Add(addBtn, 0, wxRIGHT, 4);
+         topRow->Add(delBtn, 0, wxRIGHT, 4);
+         topRow->Add(saveBtn, 0, wxRIGHT, 4);
+         topRow->AddStretchSpacer(1);
+         topRow->Add(errorLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+           auto* root = new wxBoxSizer(wxVERTICAL);
+         root->Add(topRow, 0, wxEXPAND | wxALL, 6);
+         root->Add(grid, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
 
-        panel->SetSizer(root);
-        choice->Bind(wxEVT_CHOICE, &AdminRefEditFrame::OnKindChanged, this);
-        reloadBtn->Bind(wxEVT_BUTTON, &AdminRefEditFrame::OnReload, this);
-        addBtn->Bind(wxEVT_BUTTON, &AdminRefEditFrame::OnAddRow, this);
-        delBtn->Bind(wxEVT_BUTTON, &AdminRefEditFrame::OnDeleteRows, this);
-        saveBtn->Bind(wxEVT_BUTTON, &AdminRefEditFrame::OnSave, this);
-        // изначальная загрузка
-        currentKind = 0;
-        DoReload();
+         panel->SetSizer(root);
+         choice->Bind(wxEVT_CHOICE, &AdminRefEditFrame::OnKindChanged, this);
+         reloadBtn->Bind(wxEVT_BUTTON, &AdminRefEditFrame::OnReload, this);
+         addBtn->Bind(wxEVT_BUTTON, &AdminRefEditFrame::OnAddRow, this);
+         delBtn->Bind(wxEVT_BUTTON, &AdminRefEditFrame::OnDeleteRows, this);
+          saveBtn->Bind(wxEVT_BUTTON, &AdminRefEditFrame::OnSave, this);
+          // изначальная загрузка
+          currentKind = 0;
+          DoReload();
     }
 
 private:

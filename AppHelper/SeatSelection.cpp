@@ -24,7 +24,6 @@ static Flight LoadFlightByNumber(const std::string& flightNumber)
     }
     throw AppException("Flight '" + flightNumber + "' not found in Flights table.");
 }
-
 // Прочьтение запись о самолёте из таблицы самолетов по номеру реги
 static Aircraft LoadAircraftByRegistration(const std::string& reg)
 {
@@ -52,7 +51,6 @@ static Aircraft LoadAircraftByRegistration(const std::string& reg)
 
     return ac;
 }
-
 // плоучение занятых мест для  рейса
 static std::set<std::string> LoadOccupiedSeats(const std::string& flightNumber)
 {
@@ -75,13 +73,8 @@ static std::set<std::string> LoadOccupiedSeats(const std::string& flightNumber)
 
     return occupied;
 }
-
-
 //класс места
-
-
 enum class SeatClassType { First, Business, Economy };
-
 static SeatClassType SeatClassForIndex(int idx, const Aircraft& ac)
 {
     int first = std::max(0, ac.FIRST_CLASS_SEATS);
@@ -91,9 +84,7 @@ static SeatClassType SeatClassForIndex(int idx, const Aircraft& ac)
     if (idx < first + business) return SeatClassType::Business;
     return SeatClassType::Economy;
 }
-
 //выбор места
-
 class SeatSelectionDialog : public wxDialog {
 public:
     SeatSelectionDialog(wxWindow* parent,
@@ -118,19 +109,15 @@ public:
         {
             economySeats = aircraft_.TOTAL_SEATS;
         }
-
         totalSeats_ = firstSeats + businessSeats + economySeats;
         if (totalSeats_ <= 0)
             totalSeats_ = 1;
-
         // ***-*** 
         cols_ = 7;
         seatsPerRow_ = 6;
-
         int rowsFirst = (firstSeats + 2 - 1) / 2; // *-----* 
         int rowsBusiness = (businessSeats + 4 - 1) / 4; // *-*-*-* 
         int rowsEconomy = (economySeats + 6 - 1) / 6; // ***-***
-
         rows_ = 0;
         if (firstSeats > 0) {
             rows_ += rowsFirst;
@@ -147,9 +134,7 @@ public:
 
         hasSeat.assign(rows_ * cols_, false);
         seatCode.assign(rows_ * cols_, std::string());
-
         auto* root = new wxBoxSizer(wxVERTICAL);
-
         wxString info = wxString::Format(
             "Flight: %s   Aircraft: %s (%s)\n"
             "Total seats: %d   First: %d   Business: %d   Economy: %d",
@@ -339,8 +324,8 @@ private:
 
     wxString selectedSeat_;
 
-    std::vector<bool>        hasSeat;
-    std::vector<std::string> seatCode;
+    std::vector<bool> hasSeat;
+      std::vector<std::string> seatCode;
 
     int Index(int r, int c) const { return r * cols_ + c; }
 

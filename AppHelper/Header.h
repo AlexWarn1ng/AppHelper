@@ -8,28 +8,23 @@
 #include <optional>  
 #include <wx/stattext.h>
 #include <vector>
-#include <optional>
 #include <map>
 #include <string>
-#include <vector>
-#include <memory>
-#include <optional>
 #include <functional>
-#include <mutex>
 #include <stdexcept>
 #include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <ctime>
-
 #include <wx/wx.h>
+
 //ON DUPLICATE KEY UPDATE → если ID существует → делаем UPDATE, если нет → INSERT.
 
 class Logger {
 public:
     static Logger& I() {
         static Logger inst; // что бы ток 1 логгер был
-        return inst;
+        return inst; // ссылка на логер 
     }
 
     void Write(const std::string& msg) {
@@ -69,7 +64,6 @@ enum class Role {
     Admin,
     Unknown
 };
-
 inline Role ParseRole(const wxString& s) {// inline не убиратть что бы норм компилировалось он там что то типо с многократным опеределением делает
     if (s == "Receptionist")
         return Role::Receptionist;
@@ -78,7 +72,6 @@ inline Role ParseRole(const wxString& s) {// inline не убиратть что
 
     return Role::Unknown;
 }
-
 class Session {
 public:
     wxString userId;
@@ -98,7 +91,6 @@ public:
          }
     }
 };
-
 class Person {
 public:
     std::string FULLNAME;
@@ -128,10 +120,10 @@ public:
         std::optional<std::string> PhoneNumber;
         std::optional<int>         Baggage;
         std::optional<int>         Food;
-        std::map<std::string, std::string> extraEquals;
+        std::map<std::string, std::string> dopEquals;
 
         bool empty() const {
-            return !PassengerID && !FullName && !DocNumber && !FlightNumber && !SeatNumber && !Email && !PhoneNumber && !Baggage && !Food && extraEquals.empty();
+            return !PassengerID && !FullName && !DocNumber && !FlightNumber && !SeatNumber && !Email && !PhoneNumber && !Baggage && !Food && dopEquals.empty();
         }
     };
 
@@ -173,9 +165,8 @@ public:
         std::optional<std::string> ArrivalAirport;
         std::optional<std::string> AircraftType;
         std::optional<std::string> Status;  
-
         bool empty() const {
-            return !FlightNumber && !DepartureAirport&& !ArrivalAirport && !AircraftType &&!Status;
+            return !FlightNumber && !DepartureAirport&& !ArrivalAirport && !AircraftType && !Status;
         }
     };
 
@@ -193,7 +184,8 @@ public:
 
 class Db {
 public:
-    static void init(const std::string& url, const std::string& user, const std::string& password, const std::string& schema); static Db& instance();
+    static void init(const std::string& url, const std::string& user, const std::string& password, const std::string& schema);
+    static Db& instance();
     std::unique_ptr<sql::Statement> createStatement();
     std::unique_ptr<sql::PreparedStatement> prepare(const std::string& sql);
     std::vector<Passenger> QueryPassengers(const Passenger::Filter& filter = {});
@@ -215,7 +207,7 @@ private:
     sql::Driver* driver_; // ссылка на класс который умеет создавать подключения
     std::unique_ptr<sql::Connection> conn_; // указатель на объект соединения тоесть это соединение созданное через драйвер
     std::string url_, user_, password_, schema_;
-    std::mutex m_;
+    std::mutex mutexlock;
 };
 
 class Employee : public Person {
@@ -532,8 +524,9 @@ private:
     }
 
     static bool isAlpha(const std::string& s) {
-        return std::all_of(s.begin(), s.end(),
-            [](unsigned char c) { return std::isalpha(c); });
+        return std::all_of(s.begin(), s.end(), [](unsigned char c) { 
+            return std::isalpha(c); 
+            });
     }
 };
 
@@ -541,7 +534,8 @@ class PDFPrinter
 {
 public:
     // путь к шрифту
-    explicit PDFPrinter(const std::string& ttfPath); // еклипт что бы не создавался сам конструктор и что бы не было неявного преобразования 
+     PDFPrinter(const std::string& ttfPath); // еклипт что бы не создавался сам конструктор и что бы не было неявного преобразования 
+    // explicit PDFPrinter(const std::string& ttfPath); // еклипт что бы не создавался сам конструктор и что бы не было неявного преобразования 
 
     // pdfPath  куда сохранить 
     void PrintTicketForPassenger(const Passenger& p, const std::string& pdfPath) const;

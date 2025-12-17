@@ -10,8 +10,7 @@ public:
         const wxString& title,
         const wxString& subtitle,
         const wxColour& c1 = wxColour(30, 64, 175),   
-        const wxColour& c2 = wxColour(65, 105, 225))
-        : wxPanel(parent, wxID_ANY), m_title(title), m_subtitle(subtitle), m_c1(c1), m_c2(c2)
+        const wxColour& c2 = wxColour(65, 105, 225)) : wxPanel(parent, wxID_ANY), m_title(title), m_subtitle(subtitle), m_c1(c1), m_c2(c2)
     {
         SetMinSize(wxSize(-1, 96));
         SetBackgroundStyle(wxBG_STYLE_PAINT);

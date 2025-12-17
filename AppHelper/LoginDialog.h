@@ -10,7 +10,7 @@ public:
     wxString UserId() const { return m_userId; }
     wxString UserStatus() const { return m_status; }
 
-private:
+private: 
     void OnOk(wxCommandEvent& e);
 
     wxTextCtrl* m_login{ nullptr };
